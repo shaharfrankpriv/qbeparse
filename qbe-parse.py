@@ -72,12 +72,13 @@ type_def = (Keyword("type") + ((reg_type | opaque_type))).set_name("type_def")
 
 # Data
 data_item = (Group((global_ident("symbol") + Optional(Suppress(Char('+')) + integer("offset"))
-              ))("global") | QuotedString('"')("string") | const("const")).set_name("data_item")
-data_entry = ((ext_type("type") + Group(OneOrMore(data_item)("items"))) |
+                    ))("global") | QuotedString('"')("string") | const("const")).set_name("data_item")
+data_entry = ((ext_type("type") + (OneOrMore(Group(data_item)))("items")) |
               (Suppress(Literal('z')) + integer("zero_count"))).set_name("data_entry")
-data_def = ZeroOrMore(linkage) + Keyword("data") + global_ident + \
-    EQ + Optional(align) + LBRACE + \
-    delimited_list(data_entry, delim=',', allow_trailing_delim=True) + RBRACE
+data_def = (ZeroOrMore(linkage) + Keyword("data") + global_ident +
+            EQ + Optional(align) + LBRACE +
+            Group(delimited_list(Group(data_entry), delim=',',
+                                 allow_trailing_delim=True))("data_def") + RBRACE).set_name("data_ref")
 
 block = Forward()
 
@@ -191,7 +192,7 @@ def test_element(element: ParserElement, string: str, expected: str | list | Non
         expected) == list else o.as_dict()
     if result != expected:
         print(
-            f"test_element {element.name}: Error: Parse of '{string}' expected\n'{expected}'\ngot:\n'{result} as list {o.as_list()}'")
+            f"test_element {element.name}: Error: Parse of '{string}' expected\n{expected}\ngot:\n{result}\nas list\n{o.as_list()}")
         return False
     print(f"test_element {element.name}: Success: '{string}' -> '{expected}'")
     return True
@@ -312,11 +313,29 @@ if __name__ == "__main__":
         TestCase("typedef reg single", type_def,
                  'type :fi1 = { h} # a comment', {'type_name': ':fi1', 'items': [{'type': 'h'}]}),
 
-        TestCase("data_item global", data_item, "$sym", {"global":{"symbol": "$sym"}}),
-        TestCase("data_item global+offset", data_item, "$sym + 12", {"global": {"symbol":"$sym", "offset": "12"}}),
-        TestCase("data_item string", data_item, '"kuku"', {"string":"kuku"}),
-        TestCase("data_item const", data_item, '23', {"const":"23"}),
-        
+        TestCase("data_item global", data_item, "$sym",
+                 {"global": {"symbol": "$sym"}}),
+        TestCase("data_item global+offset", data_item, "$sym + 12",
+                 {"global": {"symbol": "$sym", "offset": "12"}}),
+        TestCase("data_item string", data_item, '"kuku"', {"string": "kuku"}),
+        TestCase("data_item const", data_item, '23', {"const": "23"}),
+
+
+        TestCase("data_entry 3 words", data_entry, "w 1 2 3", {
+                 "type": "w", "items": [{"const": "1"}, {"const": "2"}, {"const": "3"}]}),
+        TestCase("data_entry clear bytes", data_entry,
+                 "z 10", {"zero_count": "10"}),
+        TestCase("data_entry long global", data_entry, "l $c", {
+                 "type": "l", "items": [{"global": {"symbol": "$c"}}]}),
+
+        TestCase("data_def, 2 type lists", data_def, "data $a = { w 1 2 3, b 0 }",
+                 {"data_def": [{"type": "w", "items": [{"const": "1"}, {"const": "2"}, {"const": "3"}]},
+                               {"type": "b", "items": [{"const": "0"}]}]}),
+        TestCase("data_def clear bytes", data_def,
+                 "data $b = {z 10}", {"data_def": [{"zero_count": "10"}]}),
+        TestCase("data_def long neg const, long global", data_def, "data $c = { l -1, l $c }", {"data_def": [
+            {"type": "l", "items": [{"const": "-1"}]},
+            {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
     ]
     errors = test_elements(tests)
-    print("Success" if errors == 0 else f"Failed with {errors} errors.")
+    print("Success" if errors == 0 else f"*** Failed with {errors} errors.")
