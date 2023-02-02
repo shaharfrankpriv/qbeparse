@@ -83,12 +83,13 @@ data_def = (ZeroOrMore(linkage) + Keyword("data") + global_ident +
 block = Forward()
 
 # Functions
-abi_type = base_type | user_type
-param = (abi_type + temp) | (Keyword('env') + temp) | Keyword("...")
-func_def = ZeroOrMore(linkage) + Keyword('function') + Optional(
-    abi_type) + global_ident + LPAR + delimited_list(
-        param, delim=',', allow_trailing_delim=True) + RPAR + Optional(NL) + LBRACE + Optional(
-            NL) + ZeroOrMore(block) + RBRACE + NL
+abi_type = (base_type | user_type).set_name("abi_type")
+param = ((abi_type + temp) | (Keyword('env') + temp)
+         | Keyword("...")).set_name("param")
+func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
+    abi_type("return_type")) + global_ident("name") + LPAR + Group(delimited_list(
+        Group(param), delim=',', allow_trailing_delim=True))("params") + RPAR + Optional(NL) + LBRACE + Optional(
+            NL) + Group(ZeroOrMore(block))("body") + RBRACE + Optional(NL)).set_name("func")
 
 # https://c9x.me/compile/doc/il.html#Phi
 
@@ -336,6 +337,19 @@ if __name__ == "__main__":
         TestCase("data_def long neg const, long global", data_def, "data $c = { l -1, l $c }", {"data_def": [
             {"type": "l", "items": [{"const": "-1"}]},
             {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
+
+        TestCase("abit_type base type", abi_type, "w", "w"),
+        TestCase("abit_type user type", abi_type, ":u", ":u"),
+
+        TestCase("param type + temp", param, "w %count", ["w", "%count"]),
+        TestCase("param env + temp", param, "env %count", ["env", "%count"]),
+        TestCase("param type + variadic", param, "...", "..."),
+
+        TestCase("function ret + single user param", func_def, "function w $getone(:one %p) {}\n", {'linkage': [], 'return_type': 'w', 'name': '$getone', 'params': [[':one', '%p']], 'body': []}
+                 ),
+        TestCase("function export, ret + 4 params", func_def, "export function w $add(env %e, w %a, w %b) {}\n", {
+            'linkage': ["export"], 'return_type': 'w', 'name': '$add', 'params': [['env', '%e'], ['w', '%a'], ['w', '%b']], 'body': []}
+        ),
     ]
     errors = test_elements(tests)
     print("Success" if errors == 0 else f"*** Failed with {errors} errors.")
