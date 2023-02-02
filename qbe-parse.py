@@ -93,8 +93,9 @@ func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
 
 # https://c9x.me/compile/doc/il.html#Phi
 
-phi = temp + EQ + base_type + \
-    Keyword('phi') + label + value + ZeroOrMore(COMMA + label + value) + NL
+phi = (temp("var") + Combine(EQ + base_type)("type") +
+       Keyword('phi') + delimited_list(
+    Group(label("label") + value("value")))("cases") + Optional(NL)).set_name("phi")
 
 # https://c9x.me/compile/doc/il.html#Instructions
 t_T = 'wlsd'
@@ -345,11 +346,17 @@ if __name__ == "__main__":
         TestCase("param env + temp", param, "env %count", ["env", "%count"]),
         TestCase("param type + variadic", param, "...", "..."),
 
-        TestCase("function ret + single user param", func_def, "function w $getone(:one %p) {}\n", {'linkage': [], 'return_type': 'w', 'name': '$getone', 'params': [[':one', '%p']], 'body': []}
-                 ),
+        TestCase("function ret + single user param", func_def, "function w $getone(:one %p) {}\n", {
+            'linkage': [], 'return_type': 'w', 'name': '$getone', 'params': [
+                [':one', '%p']], 'body': []}),
         TestCase("function export, ret + 4 params", func_def, "export function w $add(env %e, w %a, w %b) {}\n", {
-            'linkage': ["export"], 'return_type': 'w', 'name': '$add', 'params': [['env', '%e'], ['w', '%a'], ['w', '%b']], 'body': []}
+            'linkage': ["export"], 'return_type': 'w', 'name': '$add', 'params': [
+                ['env', '%e'], ['w', '%a'], ['w', '%b']], 'body': []}
         ),
+
+        TestCase("phi ret + single user param", phi, "%y =w phi @ift 1, @iff 2\n", {'var': "%y", "type": "w", "cases": [
+            {"label": "@ift", "value": "1"}, {"label": "@iff", "value": "2"}]}),
+
     ]
     errors = test_elements(tests)
     print("Success" if errors == 0 else f"*** Failed with {errors} errors.")
