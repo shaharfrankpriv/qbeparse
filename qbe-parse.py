@@ -71,8 +71,8 @@ opaque_type = (user_type("opaque_name") + EQ + align + LBRACE +
 type_def = (Keyword("type") + ((reg_type | opaque_type))).set_name("type_def")
 
 # Data
-data_item = ((global_ident("symbol") + Optional(Suppress(Char('+')) + integer("offset"))
-              ) | QuotedString('"') | const).set_name("data")
+data_item = (Group((global_ident("symbol") + Optional(Suppress(Char('+')) + integer("offset"))
+              ))("global") | QuotedString('"')("string") | const("const")).set_name("data_item")
 data_entry = ((ext_type("type") + Group(OneOrMore(data_item)("items"))) |
               (Suppress(Literal('z')) + integer("zero_count"))).set_name("data_entry")
 data_def = ZeroOrMore(linkage) + Keyword("data") + global_ident + \
@@ -311,6 +311,12 @@ if __name__ == "__main__":
                  'type :opaque = align 16 { 32 }', {'opaque_name': ':opaque', 'align': '16', 'size': '32'}),
         TestCase("typedef reg single", type_def,
                  'type :fi1 = { h} # a comment', {'type_name': ':fi1', 'items': [{'type': 'h'}]}),
+
+        TestCase("data_item global", data_item, "$sym", {"global":{"symbol": "$sym"}}),
+        TestCase("data_item global+offset", data_item, "$sym + 12", {"global": {"symbol":"$sym", "offset": "12"}}),
+        TestCase("data_item string", data_item, '"kuku"', {"string":"kuku"}),
+        TestCase("data_item const", data_item, '23', {"const":"23"}),
+        
     ]
     errors = test_elements(tests)
     print("Success" if errors == 0 else f"Failed with {errors} errors.")
