@@ -7,11 +7,13 @@ from pyparsing.exceptions import ParseException
 import re
 import sys
 
+ParserElement.set_default_whitespace_chars(' \t')
+
 ident = Word(alphas + "_", alphanums + "_").set_name("ident")
 integer = Word(nums).set_name("integer")
 LBRACE, RBRACE, LPAR, RPAR, EQ, COMMA, SEMI = map(Suppress, "{}()=,;")
 COMMENT = Char("#") + rest_of_line + '\n'
-NL = OneOrMore('\n' | COMMENT)
+NL = Suppress(OneOrMore('\n' | COMMENT))
 
 # https://c9x.me/compile/doc/il.html#Sigils
 # is for user-defined Aggregate Types
@@ -89,60 +91,134 @@ param = ((abi_type + temp) | (Keyword('env') + temp)
 func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
     abi_type("return_type")) + global_ident("name") + LPAR + Group(delimited_list(
         Group(param), delim=',', allow_trailing_delim=True))("params") + RPAR + Optional(NL) + LBRACE + Optional(
-            NL) + Group(ZeroOrMore(block))("body") + RBRACE + Optional(NL)).set_name("func")
+            NL) + Group(ZeroOrMore(block))("body") + RBRACE + NL).set_name("func")
 
 # https://c9x.me/compile/doc/il.html#Phi
 
 phi = (temp("var") + Combine(EQ + base_type)("type") +
        Keyword('phi') + delimited_list(
-    Group(label("label") + value("value")))("cases") + Optional(NL)).set_name("phi")
+    Group(label("label") + value("value")))("cases") + NL).set_name("phi")
 
 # https://c9x.me/compile/doc/il.html#Instructions
-t_T = 'wlsd'
-t_I = 'wl'
-t_F = 'sd'
-t_m = 'l'   # assuming 64-bit arch
+t_T = Char('wlsd')
+t_I = Char('wl')
+t_F = Char('sd')
+t_m = Char('l')   # assuming 64-bit arch
+
+
+instructions = []
+
+
+def inst1(name: str, ret: Char, p1: Char):
+    prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
+    body = Keyword(name)("op") + value("p1") + NL
+    inst = (prefix + body) if ret else body
+    instructions.append(inst)
+    return inst.set_name(name)
+
+
+def inst2(name: str, ret: Char, p1: Char, p2: Char):
+    prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
+    body = Keyword(name)("op") + value("p1") + COMMA + value("p2") + NL
+    inst = (prefix + body) if ret else body
+    instructions.append(inst)
+    return inst.set_name(name)
+
 
 # Arithmetic and Bits
-# add, sub, div, mul -- T(T,T)
-# neg -- T(T)
-# udiv, rem, urem -- I(I,I)
-# or, xor, and -- I(I,I)
-# sar, shr, shl -- I(I,ww)
+i_add = inst2("add", t_T, t_T, t_T)
+i_sub = inst2("sub", t_T, t_T, t_T)
+i_div = inst2("div", t_T, t_T, t_T)
+i_mul = inst2("mul", t_T, t_T, t_T)
 
-ins_add = temp + Combine(EQ + t_T) + Keyword("add") + \
-    value + COMMA + value + NL
-ins_sub = temp + Combine(EQ + t_T) + Keyword("sub") + \
-    value + COMMA + value + NL
-ins_div = temp + Combine(EQ + t_T) + Keyword("div") + \
-    value + COMMA + value + NL
-ins_mul = temp + Combine(EQ + t_T) + Keyword("mul") + \
-    value + COMMA + value + NL
+i_neg = inst1("neg", t_T, t_T)
 
-ins_neg = temp + Combine(EQ + t_T) + Keyword("neg") + \
-    value + COMMA + value + NL
+i_udiv = inst2("udiv", t_I, t_I, t_I)
+i_rem = inst2("rem", t_I, t_I, t_I)
+i_urem = inst2("urem", t_I, t_I, t_I)
+i_or = inst2("or", t_I, t_I, t_I)
+i_xor = inst2("xor", t_I, t_I, t_I)
+i_and = inst2("and", t_I, t_I, t_I)
+i_sar = inst2("sar", t_I, t_I, Char('ww'))
+i_shr = inst2("shr", t_I, t_I, Char('ww'))
+i_shl = inst2("shl", t_I, t_I, Char('ww'))
 
 # https://c9x.me/compile/doc/il.html#Memory
-ins_stored = Keyword("stored") + value + COMMA + t_m + NL
+i_stored = inst2("stored", None, t_d, t_m)
+i_stores = inst2("stores", None, t_s, t_m)
+i_storel = inst2("storel", None, t_l, t_m)
+i_storew = inst2("storew", None, t_w, t_m)
+i_storeh = inst2("storeh", None, t_w, t_m)
+i_storeb = inst2("storeb", None, t_w, t_m)
 
-# stored -- (d,m)
-# stores -- (s,m)
-# storel -- (l,m)
-# storew -- (w,m)
-# storeh -- (w,m)
-# storeb -- (w,m)
 
-ins_loadd = temp + Combine(EQ + t_d) + Keyword("neg") + \
-    value + COMMA + value + NL
-# loadd -- d(m)
-# loads -- s(m)
-# loadl -- l(m)
-# loadsw, loaduw -- I(mm)
-# loadsh, loaduh -- I(mm)
-# loadsb, loadub -- I(mm)
+t_mm = Char('mm')
+i_loadd = inst1("loadd", t_d, t_m)
+i_loads = inst1("loads", t_s, t_m)
+i_loadl = inst1("loadl", t_l, t_m)
+i_loadw = inst1("loadw", t_I, t_m)     # syntactic suger for i_loadsw
+i_loadsw = inst1("loadsw", t_I, t_mm)
+i_loadsh = inst1("loadsh", t_I, t_mm)
+i_loadsb = inst1("loadsb", t_I, t_mm)
+i_loaduw = inst1("loaduw", t_I, t_mm)
+i_loaduh = inst1("loaduh", t_I, t_mm)
+i_loadub = inst1("loadub", t_I, t_mm)
 
-instruct = (ins_add | ins_sub | ins_div | ins_mul |
-            ins_neg | ins_stored | ins_loadd) + NL
+# Stack allocation. alloc4 is alloc bytes align on 4
+i_alloc4 = inst1("alloc4", t_m, t_l)
+i_alloc8 = inst1("alloc8", t_m, t_l)
+i_alloc16 = inst1("alloc16", t_m, t_l)
+
+# https://c9x.me/compile/doc/il.html#Comparisons
+
+
+def BuildIntegerComparators():
+    """
+    eq for equality
+    ne for inequality
+    sle for signed lower or equal
+    slt for signed lower
+    sge for signed greater or equal
+    sgt for signed greater
+    ule for unsigned lower or equal
+    ult for unsigned lower
+    uge for unsigned greater or equal
+    ugt for unsigned greater
+    """
+    comps = ["eq", "ne", "sle", "slt", "sge",
+             "sgt", "ule", "ult", "uge", "ugt"]
+    for c in comps:
+        for t in "wl":
+            comp = "c" + c + t
+            name = "i_" + comp
+            print(f"Adding {name}")
+            globals()[name] = inst2(comp, t_I, Char(t + t), Char(t + t))
+
+
+def BuildFloatComparators():
+    """
+    eq for equality
+    ne for inequality
+    le for lower or equal
+    lt for lower
+    ge for greater or equal
+    gt for greater
+    o for ordered (no operand is a NaN)
+    uo for unordered (at least one operand is a NaN)
+    """
+    comps = ["eq", "ne", "le", "lt", "ge", "gt", "o", "uo"]
+    for c in comps:
+        for t in "ds":
+            comp = "c" + c + t
+            name = "i_" + comp
+            print(f"Adding {name}")
+            globals()[name] = inst2(comp, t_I, Char(t + t), Char(t + t))
+
+
+BuildIntegerComparators()
+BuildFloatComparators()
+
+instruct = MatchFirst(instructions)
 
 # https://c9x.me/compile/doc/il.html#Control
 # Even though not stated explicitly in the doc, jump is optoinal if the target is the next label.
@@ -150,7 +226,8 @@ jump = (Keyword("jmp") + label) | \
     (Keyword("jnz") + value + COMMA + label + COMMA + label) | \
     (Keyword("ret") + Optional(value))
 
-block <<= label + ZeroOrMore(phi) + ZeroOrMore(instruct) + Optional(jump) + NL
+block <<= label("label") + ZeroOrMore(phi)("phis") + \
+    ZeroOrMore(instruct)("instrcutions") + Optional(jump)("jump") + NL
 
 qbe_file = OneOrMore(type_def | data_def | func_def | block)
 
@@ -357,6 +434,85 @@ if __name__ == "__main__":
         TestCase("phi ret + single user param", phi, "%y =w phi @ift 1, @iff 2\n", {'var': "%y", "type": "w", "cases": [
             {"label": "@ift", "value": "1"}, {"label": "@iff", "value": "2"}]}),
 
+
+        TestCase("add w + w", i_add, "%y =w add %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'add', 'p1': '%w', 'p2': '%y'}),
+        TestCase("sub w + w", i_sub, "%y =w sub %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'sub', 'p1': '%w', 'p2': '%y'}),
+        TestCase("div w + w", i_div, "%y =w div %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'div', 'p1': '%w', 'p2': '%y'}),
+        TestCase("mul w + w", i_mul, "%y =w mul %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'mul', 'p1': '%w', 'p2': '%y'}),
+
+        TestCase("neg w", i_neg, "%y =w neg %w\n", {
+                 'var': '%y', 'type': 'w', 'op': 'neg', 'p1': '%w'}),
+
+        TestCase("udiv w + w", i_udiv, "%y =w udiv %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'udiv', 'p1': '%w', 'p2': '%y'}),
+        TestCase("rem w + w", i_rem, "%y =w rem %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'rem', 'p1': '%w', 'p2': '%y'}),
+        TestCase("urem w + w", i_urem, "%y =w urem %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'urem', 'p1': '%w', 'p2': '%y'}),
+        TestCase("or w + w", i_or, "%y =w or %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'or', 'p1': '%w', 'p2': '%y'}),
+        TestCase("xor w + w", i_xor, "%y =w xor %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'xor', 'p1': '%w', 'p2': '%y'}),
+        TestCase("and w + w", i_and, "%y =w and %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'and', 'p1': '%w', 'p2': '%y'}),
+
+        TestCase("sar w + w", i_sar, "%y =w sar %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'sar', 'p1': '%w', 'p2': '%y'}),
+        TestCase("shr w + w", i_shr, "%y =w shr %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'shr', 'p1': '%w', 'p2': '%y'}),
+        TestCase("shl w + w", i_shl, "%y =w shl %w, %y\n",
+                 {'var': '%y', 'type': 'w', 'op': 'shl', 'p1': '%w', 'p2': '%y'}),
+
+        TestCase("store d -> m", i_stored, "stored %w, %y\n",
+                 {'op': 'stored', 'p1': '%w', 'p2': '%y'}),
+        TestCase("store s -> m", i_stores, "stores %w, %y\n",
+                 {'op': 'stores', 'p1': '%w', 'p2': '%y'}),
+        TestCase("store l -> m", i_storel, "storel %w, %y\n",
+                 {'op': 'storel', 'p1': '%w', 'p2': '%y'}),
+        TestCase("store w -> m", i_storew, "storew %w, %y\n",
+                 {'op': 'storew', 'p1': '%w', 'p2': '%y'}),
+        TestCase("store h -> m", i_storeh, "storeh %w, %y\n",
+                 {'op': 'storeh', 'p1': '%w', 'p2': '%y'}),
+        TestCase("store b -> m", i_storeb, "storeb %w, %y\n",
+                 {'op': 'storeb', 'p1': '%w', 'p2': '%y'}),
+
+        TestCase("load d -> m", i_loadd, "%z =d loadd %w\n",
+                 {'var': '%z', 'type': 'd', 'op': 'loadd', 'p1': '%w'}),
+        TestCase("load s -> m", i_loads, "%z =s loads %w\n",
+                 {'var': '%z', 'type': 's', 'op': 'loads', 'p1': '%w'}),
+        TestCase("load l -> m", i_loadl, "%z =l loadl %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'loadl', 'p1': '%w'}),
+        TestCase("load w -> m", i_loadw, "%z =w loadw %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'loadw', 'p1': '%w'}),
+        TestCase("load sw -> m", i_loadsw, "%z =w loadsw %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'loadsw', 'p1': '%w'}),
+        TestCase("load sh -> m", i_loadsh, "%z =w loadsh %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'loadsh', 'p1': '%w'}),
+        TestCase("load sb -> m", i_loadsb, "%z =w loadsb %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'loadsb', 'p1': '%w'}),
+        TestCase("load uw -> m", i_loaduw, "%z =w loaduw %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'loaduw', 'p1': '%w'}),
+        TestCase("load uh -> m", i_loaduh, "%z =w loaduh %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'loaduh', 'p1': '%w'}),
+        TestCase("load ub -> m", i_loadub, "%z =w loadub %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'loadub', 'p1': '%w'}),
+
+        TestCase("alloc4 8", i_alloc4, "%z =l alloc4 %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'alloc4', 'p1': '%w'}),
+        TestCase("alloc8 8", i_alloc8, "%z =l alloc8 %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'alloc8', 'p1': '%w'}),
+        TestCase("alloc16 8", i_alloc16, "%z =l alloc16 %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'alloc16', 'p1': '%w'}),
+
+        TestCase("ceqw w w", i_ceqw, "%z =l ceqw %w, %y\n",
+                 {'var': '%z', 'type': 'l', 'op': 'ceqw', 'p1': '%w', 'p2': '%y'}),
+        TestCase("cod d d", i_cod, "%z =l cod %w, %y\n",
+                 {'var': '%z', 'type': 'l', 'op': 'cod', 'p1': '%w', 'p2': '%y'}),
     ]
+    Init()
     errors = test_elements(tests)
     print("Success" if errors == 0 else f"*** Failed with {errors} errors.")
