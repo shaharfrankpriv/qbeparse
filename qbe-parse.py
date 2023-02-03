@@ -106,70 +106,72 @@ t_F = Char('sd')
 t_m = Char('l')   # assuming 64-bit arch
 
 
-instructions = []
-
-
-def inst1(name: str, ret: Char, p1: Char):
+def inst1(name: str, ret: Char, p1: Char, group: list):
     prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
     body = Keyword(name)("op") + value("p1") + NL
     inst = (prefix + body) if ret else body
-    instructions.append(inst)
+    group.append(inst)
     return inst.set_name(name)
 
 
-def inst2(name: str, ret: Char, p1: Char, p2: Char):
+def inst2(name: str, ret: Char, p1: Char, p2: Char, group: list):
     prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
     body = Keyword(name)("op") + value("p1") + COMMA + value("p2") + NL
     inst = (prefix + body) if ret else body
-    instructions.append(inst)
+    group.append(inst)
     return inst.set_name(name)
 
 
 # Arithmetic and Bits
-i_add = inst2("add", t_T, t_T, t_T)
-i_sub = inst2("sub", t_T, t_T, t_T)
-i_div = inst2("div", t_T, t_T, t_T)
-i_mul = inst2("mul", t_T, t_T, t_T)
+arithmetic = []
+i_add = inst2("add", t_T, t_T, t_T, arithmetic)
+i_sub = inst2("sub", t_T, t_T, t_T, arithmetic)
+i_div = inst2("div", t_T, t_T, t_T, arithmetic)
+i_mul = inst2("mul", t_T, t_T, t_T, arithmetic)
 
-i_neg = inst1("neg", t_T, t_T)
+i_neg = inst1("neg", t_T, t_T, arithmetic)
 
-i_udiv = inst2("udiv", t_I, t_I, t_I)
-i_rem = inst2("rem", t_I, t_I, t_I)
-i_urem = inst2("urem", t_I, t_I, t_I)
-i_or = inst2("or", t_I, t_I, t_I)
-i_xor = inst2("xor", t_I, t_I, t_I)
-i_and = inst2("and", t_I, t_I, t_I)
-i_sar = inst2("sar", t_I, t_I, Char('ww'))
-i_shr = inst2("shr", t_I, t_I, Char('ww'))
-i_shl = inst2("shl", t_I, t_I, Char('ww'))
+i_udiv = inst2("udiv", t_I, t_I, t_I, arithmetic)
+i_rem = inst2("rem", t_I, t_I, t_I, arithmetic)
+i_urem = inst2("urem", t_I, t_I, t_I, arithmetic)
+i_or = inst2("or", t_I, t_I, t_I, arithmetic)
+i_xor = inst2("xor", t_I, t_I, t_I, arithmetic)
+i_and = inst2("and", t_I, t_I, t_I, arithmetic)
+i_sar = inst2("sar", t_I, t_I, Char('ww'), arithmetic)
+i_shr = inst2("shr", t_I, t_I, Char('ww'), arithmetic)
+i_shl = inst2("shl", t_I, t_I, Char('ww'), arithmetic)
 
 # https://c9x.me/compile/doc/il.html#Memory
-i_stored = inst2("stored", None, t_d, t_m)
-i_stores = inst2("stores", None, t_s, t_m)
-i_storel = inst2("storel", None, t_l, t_m)
-i_storew = inst2("storew", None, t_w, t_m)
-i_storeh = inst2("storeh", None, t_w, t_m)
-i_storeb = inst2("storeb", None, t_w, t_m)
+mem_store = []
+i_stored = inst2("stored", None, t_d, t_m, mem_store)
+i_stores = inst2("stores", None, t_s, t_m, mem_store)
+i_storel = inst2("storel", None, t_l, t_m, mem_store)
+i_storew = inst2("storew", None, t_w, t_m, mem_store)
+i_storeh = inst2("storeh", None, t_w, t_m, mem_store)
+i_storeb = inst2("storeb", None, t_w, t_m, mem_store)
 
-
+mem_load = []
 t_mm = Char('mm')
-i_loadd = inst1("loadd", t_d, t_m)
-i_loads = inst1("loads", t_s, t_m)
-i_loadl = inst1("loadl", t_l, t_m)
-i_loadw = inst1("loadw", t_I, t_m)     # syntactic suger for i_loadsw
-i_loadsw = inst1("loadsw", t_I, t_mm)
-i_loadsh = inst1("loadsh", t_I, t_mm)
-i_loadsb = inst1("loadsb", t_I, t_mm)
-i_loaduw = inst1("loaduw", t_I, t_mm)
-i_loaduh = inst1("loaduh", t_I, t_mm)
-i_loadub = inst1("loadub", t_I, t_mm)
+i_loadd = inst1("loadd", t_d, t_m, mem_load)
+i_loads = inst1("loads", t_s, t_m, mem_load)
+i_loadl = inst1("loadl", t_l, t_m, mem_load)
+i_loadw = inst1("loadw", t_I, t_m, mem_load)     # syntactic suger for i_loadsw
+i_loadsw = inst1("loadsw", t_I, t_mm, mem_load)
+i_loadsh = inst1("loadsh", t_I, t_mm, mem_load)
+i_loadsb = inst1("loadsb", t_I, t_mm, mem_load)
+i_loaduw = inst1("loaduw", t_I, t_mm, mem_load)
+i_loaduh = inst1("loaduh", t_I, t_mm, mem_load)
+i_loadub = inst1("loadub", t_I, t_mm, mem_load)
 
 # Stack allocation. alloc4 is alloc bytes align on 4
-i_alloc4 = inst1("alloc4", t_m, t_l)
-i_alloc8 = inst1("alloc8", t_m, t_l)
-i_alloc16 = inst1("alloc16", t_m, t_l)
+stack_alloc = []
+i_alloc4 = inst1("alloc4", t_m, t_l, stack_alloc)
+i_alloc8 = inst1("alloc8", t_m, t_l, stack_alloc)
+i_alloc16 = inst1("alloc16", t_m, t_l, stack_alloc)
 
 # https://c9x.me/compile/doc/il.html#Comparisons
+
+comparators = []
 
 
 def BuildIntegerComparators():
@@ -192,7 +194,8 @@ def BuildIntegerComparators():
             comp = "c" + c + t
             name = "i_" + comp
             print(f"Adding {name}")
-            globals()[name] = inst2(comp, t_I, Char(t + t), Char(t + t))
+            globals()[name] = inst2(comp, t_I, Char(
+                t + t), Char(t + t), comparators)
 
 
 def BuildFloatComparators():
@@ -212,12 +215,46 @@ def BuildFloatComparators():
             comp = "c" + c + t
             name = "i_" + comp
             print(f"Adding {name}")
-            globals()[name] = inst2(comp, t_I, Char(t + t), Char(t + t))
+            globals()[name] = inst2(comp, t_I, Char(
+                t + t), Char(t + t), comparators)
 
 
 BuildIntegerComparators()
 BuildFloatComparators()
 
+# https://c9x.me/compile/doc/il.html#Conversions
+conversions = []
+i_extsw = inst1("extsw", t_l, t_w, conversions)  # extend signed w -> l
+i_extuw = inst1("extuw", t_l, t_w, conversions)  # extend unsigned w -> l
+# extend signed h -> l/w
+i_extsh = inst1("extsh", t_I, Char('ww'), conversions)
+# extend unsigned h -> l/w
+i_extuh = inst1("extuh", t_I, Char('ww'), conversions)
+# extend signed b -> l/w
+i_extsb = inst1("extsb", t_I, Char('ww'), conversions)
+# extend unsigned b -> l/w
+i_extub = inst1("extub", t_I, Char('ww'), conversions)
+i_exts = inst1("exts", t_d, t_s, conversions)  # extend unsigned s -> d
+i_truncd = inst1("truncd", t_s, t_d, conversions)    # trucate d -> s
+# convert s -> signed  l/w
+i_stosi = inst1("stosi", t_I, Char('ss'), conversions)
+# convert s -> unsigned l/w
+i_stoui = inst1("stoui", t_I, Char('ss'), conversions)
+# convert d -> signed  l/w
+i_dtosi = inst1("dtosi", t_I, Char('dd'), conversions)
+# convert d -> unsigned l/w
+i_dtoui = inst1("dtoui", t_I, Char('dd'), conversions)
+# convert signed w -> d/s
+i_swtof = inst1("swtof", t_F, Char('ww'), conversions)
+# convert unsigned w -> d/s
+i_uwtof = inst1("uwtof", t_F, Char('ww'), conversions)
+# convert signed l -> d/s
+i_sltof = inst1("sltof", t_F, Char('ll'), conversions)
+# convert unsigned l -> d/s
+i_ultof = inst1("ultof", t_F, Char('ll'), conversions)
+
+instructions = arithmetic + mem_store + mem_load + \
+    stack_alloc + comparators + conversions
 instruct = MatchFirst(instructions)
 
 # https://c9x.me/compile/doc/il.html#Control
@@ -435,6 +472,7 @@ if __name__ == "__main__":
             {"label": "@ift", "value": "1"}, {"label": "@iff", "value": "2"}]}),
 
 
+        # Arithmetics
         TestCase("add w + w", i_add, "%y =w add %w, %y\n",
                  {'var': '%y', 'type': 'w', 'op': 'add', 'p1': '%w', 'p2': '%y'}),
         TestCase("sub w + w", i_sub, "%y =w sub %w, %y\n",
@@ -467,6 +505,7 @@ if __name__ == "__main__":
         TestCase("shl w + w", i_shl, "%y =w shl %w, %y\n",
                  {'var': '%y', 'type': 'w', 'op': 'shl', 'p1': '%w', 'p2': '%y'}),
 
+        # mem stores
         TestCase("store d -> m", i_stored, "stored %w, %y\n",
                  {'op': 'stored', 'p1': '%w', 'p2': '%y'}),
         TestCase("store s -> m", i_stores, "stores %w, %y\n",
@@ -480,6 +519,7 @@ if __name__ == "__main__":
         TestCase("store b -> m", i_storeb, "storeb %w, %y\n",
                  {'op': 'storeb', 'p1': '%w', 'p2': '%y'}),
 
+        # mem loads
         TestCase("load d -> m", i_loadd, "%z =d loadd %w\n",
                  {'var': '%z', 'type': 'd', 'op': 'loadd', 'p1': '%w'}),
         TestCase("load s -> m", i_loads, "%z =s loads %w\n",
@@ -501,6 +541,7 @@ if __name__ == "__main__":
         TestCase("load ub -> m", i_loadub, "%z =w loadub %w\n",
                  {'var': '%z', 'type': 'w', 'op': 'loadub', 'p1': '%w'}),
 
+        # stack allocs
         TestCase("alloc4 8", i_alloc4, "%z =l alloc4 %w\n",
                  {'var': '%z', 'type': 'l', 'op': 'alloc4', 'p1': '%w'}),
         TestCase("alloc8 8", i_alloc8, "%z =l alloc8 %w\n",
@@ -508,10 +549,45 @@ if __name__ == "__main__":
         TestCase("alloc16 8", i_alloc16, "%z =l alloc16 %w\n",
                  {'var': '%z', 'type': 'l', 'op': 'alloc16', 'p1': '%w'}),
 
+        # Comparators are build by a builder functions, sample one of each builder
         TestCase("ceqw w w", i_ceqw, "%z =l ceqw %w, %y\n",
                  {'var': '%z', 'type': 'l', 'op': 'ceqw', 'p1': '%w', 'p2': '%y'}),
         TestCase("cod d d", i_cod, "%z =l cod %w, %y\n",
                  {'var': '%z', 'type': 'l', 'op': 'cod', 'p1': '%w', 'p2': '%y'}),
+
+        # conversions
+        TestCase("extend signed w", i_extsw, "%z =l extsw %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'extsw', 'p1': '%w'}),
+        TestCase("extend unsigned w", i_extuw, "%z =l extuw %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'extuw', 'p1': '%w'}),
+        TestCase("extend signed h", i_extsh, "%z =l extsh %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'extsh', 'p1': '%w'}),
+        TestCase("extend unsigned h", i_extuh, "%z =l extuh %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'extuh', 'p1': '%w'}),
+        TestCase("extend signed b", i_extsb, "%z =l extsb %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'extsb', 'p1': '%w'}),
+        TestCase("extend unsigned b", i_extub, "%z =l extub %w\n",
+                 {'var': '%z', 'type': 'l', 'op': 'extub', 'p1': '%w'}),
+        TestCase("extend s", i_exts, "%z =d exts %s\n",
+                 {'var': '%z', 'type': 'd', 'op': 'exts', 'p1': '%s'}),
+        TestCase("truncate d", i_truncd, "%z =s truncd %d\n",
+                 {'var': '%z', 'type': 's', 'op': 'truncd', 'p1': '%d'}),
+        TestCase("convert s to signed int", i_stosi, "%z =l stosi %s\n",
+                 {'var': '%z', 'type': 'l', 'op': 'stosi', 'p1': '%s'}),
+        TestCase("convert s to unsigned int", i_stoui, "%z =l stoui %s\n",
+                 {'var': '%z', 'type': 'l', 'op': 'stoui', 'p1': '%s'}),
+        TestCase("convert d to unsigned int", i_dtoui, "%z =l dtoui %d\n",
+                 {'var': '%z', 'type': 'l', 'op': 'dtoui', 'p1': '%d'}),
+        TestCase("convert d to unsigned int", i_dtoui, "%z =l dtoui %d\n",
+                 {'var': '%z', 'type': 'l', 'op': 'dtoui', 'p1': '%d'}),
+        TestCase("convert unsigned w to F", i_swtof, "%z =d swtof %w\n",
+                 {'var': '%z', 'type': 'd', 'op': 'swtof', 'p1': '%w'}),
+        TestCase("convert unsigned w to F", i_uwtof, "%z =d uwtof %w\n",
+                 {'var': '%z', 'type': 'd', 'op': 'uwtof', 'p1': '%w'}),
+        TestCase("convert unsigned l to F", i_sltof, "%z =d sltof %l\n",
+                 {'var': '%z', 'type': 'd', 'op': 'sltof', 'p1': '%l'}),
+        TestCase("convert unsigned l to F", i_ultof, "%z =d ultof %l\n",
+                 {'var': '%z', 'type': 'd', 'op': 'ultof', 'p1': '%l'}),
     ]
     Init()
     errors = test_elements(tests)
