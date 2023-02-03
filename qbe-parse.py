@@ -82,16 +82,6 @@ data_def = (ZeroOrMore(linkage) + Keyword("data") + global_ident +
             Group(delimited_list(Group(data_entry), delim=',',
                                  allow_trailing_delim=True))("data_def") + RBRACE).set_name("data_ref")
 
-block = Forward()
-
-# Functions
-abi_type = (base_type | user_type).set_name("abi_type")
-param = ((abi_type + temp) | (Keyword('env') + temp)
-         | Keyword("...")).set_name("param")
-func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
-    abi_type("return_type")) + global_ident("name") + LPAR + Group(delimited_list(
-        Group(param), delim=',', allow_trailing_delim=True))("params") + RPAR + Optional(NL) + LBRACE + Optional(
-            NL) + Group(ZeroOrMore(block))("body") + RBRACE + NL).set_name("func")
 
 # https://c9x.me/compile/doc/il.html#Phi
 
@@ -255,8 +245,10 @@ i_ultof = inst1("ultof", t_F, Char('ll'), conversions)
 
 # https://c9x.me/compile/doc/il.html#Cast-and-Copy
 casts = []
-i_cast = inst1("cast", Char('wlsd'), Char('sdwl'), casts)   # cast the param to the ret type (same size)
-i_copy = inst1("copy", t_T, t_T, casts)     # copy the param to the dest (same type)
+# cast the param to the ret type (same size)
+i_cast = inst1("cast", Char('wlsd'), Char('sdwl'), casts)
+# copy the param to the dest (same type)
+i_copy = inst1("copy", t_T, t_T, casts)
 
 instructions = arithmetic + mem_store + mem_load + \
     stack_alloc + comparators + conversions + casts
@@ -267,6 +259,33 @@ instruct = MatchFirst(instructions)
 jump = (Keyword("jmp") + label) | \
     (Keyword("jnz") + value + COMMA + label + COMMA + label) | \
     (Keyword("ret") + Optional(value))
+
+block = Forward()
+# https://c9x.me/compile/doc/il.html#Functions
+sub_word = (Literal('sb') | Literal('ub') | Literal(
+    'sh') | Literal("uh")).set_name("sub_word")
+abi_type = (base_type | sub_word | user_type).set_name("abi_type")
+param = ((abi_type + temp) | (Keyword('env') + temp)
+         | Literal("...")).set_name("param")
+func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
+    abi_type("return_type")) + global_ident("name") + LPAR + Group(delimited_list(
+        Group(param), delim=',', allow_trailing_delim=True))("params") + RPAR + Optional(NL) + LBRACE + Optional(
+            NL) + Group(ZeroOrMore(block))("body") + RBRACE + NL).set_name("func")
+
+# https://c9x.me/compile/doc/il.html#Call
+# CALL := [%IDENT '=' ABITY] 'call' VAL '(' (ARG), ')'
+
+# ARG :=
+#     ABITY VAL  # Regular argument
+#   | 'env' VAL  # Environment argument (first)
+#   | '...'      # Variadic marker
+
+# SUBWTY := 'sb' | 'ub' | 'sh' | 'uh'  # Sub-word types
+# ABITY  := BASETY | SUBWTY | :IDENT
+arg = ((abi_type + value) | (Literal('env') + value)
+       | Literal("...")).set_name("arg")
+call = Optional(user_type + EQ + abi_type) + Keyword('call') + \
+    value + LPAR + delimited_list(Group(arg)) + RPAR + NL
 
 block <<= label("label") + ZeroOrMore(phi)("phis") + \
     ZeroOrMore(instruct)("instrcutions") + Optional(jump)("jump") + NL
@@ -458,24 +477,8 @@ if __name__ == "__main__":
             {"type": "l", "items": [{"const": "-1"}]},
             {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
 
-        TestCase("abit_type base type", abi_type, "w", "w"),
-        TestCase("abit_type user type", abi_type, ":u", ":u"),
-
-        TestCase("param type + temp", param, "w %count", ["w", "%count"]),
-        TestCase("param env + temp", param, "env %count", ["env", "%count"]),
-        TestCase("param type + variadic", param, "...", "..."),
-
-        TestCase("function ret + single user param", func_def, "function w $getone(:one %p) {}\n", {
-            'linkage': [], 'return_type': 'w', 'name': '$getone', 'params': [
-                [':one', '%p']], 'body': []}),
-        TestCase("function export, ret + 4 params", func_def, "export function w $add(env %e, w %a, w %b) {}\n", {
-            'linkage': ["export"], 'return_type': 'w', 'name': '$add', 'params': [
-                ['env', '%e'], ['w', '%a'], ['w', '%b']], 'body': []}
-        ),
-
         TestCase("phi ret + single user param", phi, "%y =w phi @ift 1, @iff 2\n", {'var': "%y", "type": "w", "cases": [
             {"label": "@ift", "value": "1"}, {"label": "@iff", "value": "2"}]}),
-
 
         # Arithmetics
         TestCase("add w + w", i_add, "%y =w add %w, %y\n",
@@ -599,6 +602,27 @@ if __name__ == "__main__":
                  {'var': '%z', 'type': 's', 'op': 'cast', 'p1': '%w'}),
         TestCase("copy w -> w", i_copy, "%z =w copy %w\n",
                  {'var': '%z', 'type': 'w', 'op': 'copy', 'p1': '%w'}),
+
+        # Function
+        TestCase("abi_type base type", abi_type, "w", "w"),
+        TestCase("abi_type user type", abi_type, ":u", ":u"),
+
+        TestCase("param type + temp", param, "w %count", ["w", "%count"]),
+        TestCase("param env + temp", param, "env %count", ["env", "%count"]),
+        TestCase("param type + variadic", param, "...", "..."),
+
+        TestCase("function ret + single user param", func_def, "function w $getone(:one %p) {}\n", {
+            'linkage': [], 'return_type': 'w', 'name': '$getone', 'params': [
+                [':one', '%p']], 'body': []}),
+        TestCase("function export, ret + 4 params", func_def, "export function w $add(env %e, w %a, w %b) {}\n", {
+            'linkage': ["export"], 'return_type': 'w', 'name': '$add', 'params': [
+                ['env', '%e'], ['w', '%a'], ['w', '%b']], 'body': []}
+        ),
+
+        # Call
+        TestCase("arg type + const", arg, "w 5", ["w", "5"]),
+        TestCase("arg env + temp", arg, "env %count", ["env", "%count"]),
+        TestCase("arg type + variadic", arg, "...", "..."),
     ]
     Init()
     errors = test_elements(tests)
