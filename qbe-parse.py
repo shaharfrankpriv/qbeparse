@@ -253,8 +253,13 @@ i_sltof = inst1("sltof", t_F, Char('ll'), conversions)
 # convert unsigned l -> d/s
 i_ultof = inst1("ultof", t_F, Char('ll'), conversions)
 
+# https://c9x.me/compile/doc/il.html#Cast-and-Copy
+casts = []
+i_cast = inst1("cast", Char('wlsd'), Char('sdwl'), casts)   # cast the param to the ret type (same size)
+i_copy = inst1("copy", t_T, t_T, casts)     # copy the param to the dest (same type)
+
 instructions = arithmetic + mem_store + mem_load + \
-    stack_alloc + comparators + conversions
+    stack_alloc + comparators + conversions + casts
 instruct = MatchFirst(instructions)
 
 # https://c9x.me/compile/doc/il.html#Control
@@ -588,6 +593,12 @@ if __name__ == "__main__":
                  {'var': '%z', 'type': 'd', 'op': 'sltof', 'p1': '%l'}),
         TestCase("convert unsigned l to F", i_ultof, "%z =d ultof %l\n",
                  {'var': '%z', 'type': 'd', 'op': 'ultof', 'p1': '%l'}),
+
+        # casts
+        TestCase("cast w -> s", i_cast, "%z =s cast %w\n",
+                 {'var': '%z', 'type': 's', 'op': 'cast', 'p1': '%w'}),
+        TestCase("copy w -> w", i_copy, "%z =w copy %w\n",
+                 {'var': '%z', 'type': 'w', 'op': 'copy', 'p1': '%w'}),
     ]
     Init()
     errors = test_elements(tests)
