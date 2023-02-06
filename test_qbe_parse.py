@@ -364,11 +364,11 @@ class TestQBEParsing(unittest.TestCase):
                      "env %count", ["env", "%count"]),
             TestCase("arg type + variadic", qbe.arg, "...", "..."),
             TestCase("call - no ret, single arg", qbe.call, "call $incone(w %p)\n", {
-                'name': "$incone", 'args': [['w', '%p']], }),
+                'name': "$incone", 'op': 'call', 'args': [['w', '%p']], }),
             TestCase("call - ret + two arg", qbe.call, "%r =s call $vadd(s %a, l %ap)\n", {
-                'ret_var': '%r', 'ret_type': 's', 'name': "$vadd", 'args': [['s', '%a'], ['l', '%ap']], }),
+                'ret_var': '%r', 'op': 'call', 'ret_type': 's', 'name': "$vadd", 'args': [['s', '%a'], ['l', '%ap']], }),
             TestCase("call - ret + even + two arg", qbe.call, "%r =s call $vadd(env %b, s %a, l %ap)\n", {
-                'ret_var': '%r', 'ret_type': 's', 'name': "$vadd", 'args': [['env', '%b'], ['s', '%a'], ['l', '%ap']], }),
+                'ret_var': '%r', 'op': 'call', 'ret_type': 's', 'name': "$vadd", 'args': [['env', '%b'], ['s', '%a'], ['l', '%ap']], }),
         ]
         self.assertEqual(test_elements(tests), 0)
 
@@ -456,13 +456,13 @@ class TestQBEParsing(unittest.TestCase):
 
             TestCase("function ret + single user param", qbe.func_def, "function w $getone(:one %p) {}\n", {
                 'linkage': [], 'return_type': 'w', 'name': '$getone', 'params': [
-                    [':one', '%p']], 'body': []}),
+                    [':one', '%p']], 'blocks': []}),
             TestCase("function export, ret + 4 params", qbe.func_def, "export function w $add(env %e, w %a, w %b) {}\n", {
                 'linkage': ["export"], 'return_type': 'w', 'name': '$add', 'params': [
-                    ['env', '%e'], ['w', '%a'], ['w', '%b']], 'body': []}
+                    ['env', '%e'], ['w', '%a'], ['w', '%b']], 'blocks': []}
             ),
             TestCase("function f1, no param, with 3 blocks", qbe.func_def, f1, {
-                'linkage': [], 'name': '$loop', 'body': [
+                'linkage': [], 'name': '$loop', 'blocks': [
                     {'label': '@start', 'phis': [], 'inst': [], 'jump': []},
                     {'label': '@loop', 'phis': [
                         {'var': '%x', 'type': 'w', 'cases': [

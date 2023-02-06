@@ -1,6 +1,9 @@
+#!/usr/bin/env python3
 # Parse QBE IR.
 # Based on the doc: https://www.google.com/search?q=qbe+ir+reference&oq=qbe+ir+reference&aqs=chrome..69i57j33i10i160l2.5470j0j7&sourceid=chrome&ie=UTF-8
 
+import argparse
+import json
 from pyparsing import *
 from pyparsing.testing import pyparsing_test as ppt
 import re
@@ -9,7 +12,7 @@ import sys
 # newline is not to be ignored!
 ParserElement.set_default_whitespace_chars(' \t')
 
-ident = Word(alphas + "_", alphanums + "_").set_name("ident")
+ident = Word(alphas + "_" + '.', alphanums + "_" + ".").set_name("ident")
 integer = Word(nums).set_name("integer")
 LBRACE, RBRACE, LPAR, RPAR, EQ, COMMA, SEMI = map(Suppress, "{}()=,;")
 COMMENT = Char("#") + rest_of_line + '\n'
@@ -183,7 +186,6 @@ def BuildIntegerComparators():
         for t in "wl":
             comp = "c" + c + t
             name = "i_" + comp
-            print(f"Adding {name}")
             globals()[name] = inst2(comp, t_I, Char(
                 t + t), Char(t + t), comparators)
 
@@ -204,7 +206,6 @@ def BuildFloatComparators():
         for t in "ds":
             comp = "c" + c + t
             name = "i_" + comp
-            print(f"Adding {name}")
             globals()[name] = inst2(comp, t_I, Char(
                 t + t), Char(t + t), comparators)
 
@@ -250,9 +251,6 @@ i_cast = inst1("cast", Char('wlsd'), Char('sdwl'), casts)
 # copy the param to the dest (same type)
 i_copy = inst1("copy", t_T, t_T, casts)
 
-instructions = arithmetic + mem_store + mem_load + \
-    stack_alloc + comparators + conversions + casts
-instruct = MatchFirst(instructions)
 
 block = Forward()
 # https://c9x.me/compile/doc/il.html#Functions
@@ -264,7 +262,7 @@ param = ((abi_type + temp) | (Keyword('env') + temp)
 func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
     abi_type("return_type")) + global_ident("name") + LPAR + Optional(delimited_list(
         Group(param), delim=',', allow_trailing_delim=True))("params") + RPAR + Optional(NL) + LBRACE + Optional(
-            NL) + Group(ZeroOrMore(Group(block)))("body") + RBRACE + NL).set_name("func")
+            NL) + Group(ZeroOrMore(Group(block)))("blocks") + RBRACE + NL).set_name("func")
 
 # https://c9x.me/compile/doc/il.html#Call
 # CALL := [%IDENT '=' ABITY] 'call' VAL '(' (ARG), ')'
@@ -278,8 +276,12 @@ func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
 # ABITY  := BASETY | SUBWTY | :IDENT
 arg = ((abi_type + value) | (Literal('env') + value)
        | Literal("...")).set_name("arg")
-call = (Optional(temp("ret_var") + Combine(EQ + abi_type)("ret_type")) + Keyword('call') +
+call = (Optional(temp("ret_var") + Combine(EQ + abi_type)("ret_type")) + Keyword('call')("op") +
         value("name") + LPAR + delimited_list(Group(arg))("args") + RPAR + NL).set_name("call")
+
+instructions = arithmetic + mem_store + mem_load + \
+    stack_alloc + comparators + conversions + casts
+instruct = MatchFirst(instructions) | call
 
 # https://c9x.me/compile/doc/il.html#Control
 
@@ -295,17 +297,36 @@ jump = (((Keyword("jmp")("jump") + label("target")) |
 block <<= (Optional(NL) + label("label") + NL + Group(ZeroOrMore(Group(phi)))("phis") +
            Group(ZeroOrMore((Group(instruct))))("inst") + Group(Optional(jump))("jump")).set_name("block")
 
-qbe_file = OneOrMore(type_def | data_def | func_def)
+top = (Group(func_def)("func") | Group(type_def)("typedef")
+       | Group(data_def)("datadef")).set_name("top")
+qbe_file = Group(OneOrMore(Group(top)))("elems").set_name("qbe")
 
 
-
-
-def ParseText(s: str) -> ParserElement:
-    #autoname_elements()
-    #block.set_debug()
-    #print(ppt.with_line_numbers(s))
+def ParseText(s: str, vebose: bool = False) -> ParserElement:
+    # autoname_elements()
+    # block.set_debug()
+    if vebose:
+        print(ppt.with_line_numbers(s))
     return qbe_file.parseString(s)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        prog='qbeparse',
+        description='Parse qbe files.',
+        epilog='')
+    parser.add_argument('filename', metavar='Filename',
+                        nargs='+',)           # positional argument
+    parser.add_argument('-v', '--verbose', action='store_true')  # on/off flag
+    args = parser.parse_args()
+    for f in args.filename:
+        try:
+            print(f"------ '{f}' ------\n")
+            json_dict = ParseText(open(f, "r").read()+"\n").as_dict()
+            json.dump(json_dict, sys.stdout, indent=4, sort_keys=False)
+        except ParseException as e:
+            print(f"Parsing of '{f}' failed: {str(e)}", file=sys.stderr)
+        except IOError as e:
+            print(f"Can't access/read '{f}': {str(e)}", file=sys.stderr)
+    print()
     sys.exit(0)
