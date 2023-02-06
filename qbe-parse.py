@@ -7,6 +7,7 @@ from pyparsing.exceptions import ParseException
 import re
 import sys
 
+# newline is not to be ignored!
 ParserElement.set_default_whitespace_chars(' \t')
 
 ident = Word(alphas + "_", alphanums + "_").set_name("ident")
@@ -254,12 +255,6 @@ instructions = arithmetic + mem_store + mem_load + \
     stack_alloc + comparators + conversions + casts
 instruct = MatchFirst(instructions)
 
-# https://c9x.me/compile/doc/il.html#Control
-# Even though not stated explicitly in the doc, jump is optoinal if the target is the next label.
-jump = (Keyword("jmp") + label) | \
-    (Keyword("jnz") + value + COMMA + label + COMMA + label) | \
-    (Keyword("ret") + Optional(value))
-
 block = Forward()
 # https://c9x.me/compile/doc/il.html#Functions
 sub_word = (Literal('sb') | Literal('ub') | Literal(
@@ -284,11 +279,22 @@ func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
 # ABITY  := BASETY | SUBWTY | :IDENT
 arg = ((abi_type + value) | (Literal('env') + value)
        | Literal("...")).set_name("arg")
-call = Optional(user_type + EQ + abi_type) + Keyword('call') + \
-    value + LPAR + delimited_list(Group(arg)) + RPAR + NL
+call = (Optional(temp("ret_var") + Combine(EQ + abi_type)("ret_type")) + Keyword('call') +
+        value("name") + LPAR + delimited_list(Group(arg))("args") + RPAR + NL).set_name("call")
 
-block <<= label("label") + ZeroOrMore(phi)("phis") + \
-    ZeroOrMore(instruct)("instrcutions") + Optional(jump)("jump") + NL
+# https://c9x.me/compile/doc/il.html#Control
+
+# https://c9x.me/compile/doc/il.html#Jumps
+jump = (((Keyword("jmp")("jump") + label("target")) |
+         (Keyword("jnz")("jump") + value("test") + COMMA + label("notzero") + COMMA + label("zero")) |
+         (Keyword("ret")("jump") + Optional(value)("ret_value")) |
+         Keyword('hlt')("jump")) + NL).set_name("jump")
+
+# https://c9x.me/compile/doc/il.html#Blocks
+# Even though not stated explicitly in the doc, the jump part of the block is optional
+# if the target is the next label.
+block <<= (Optional(NL) + label("label") + NL + Group(ZeroOrMore(Group(phi)))("phis") +
+           Group(ZeroOrMore((Group(instruct))))("inst") + Group(Optional(jump))("jump")).set_name("block")
 
 qbe_file = OneOrMore(type_def | data_def | func_def | block)
 
@@ -477,6 +483,7 @@ if __name__ == "__main__":
             {"type": "l", "items": [{"const": "-1"}]},
             {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
 
+        # Phi
         TestCase("phi ret + single user param", phi, "%y =w phi @ift 1, @iff 2\n", {'var': "%y", "type": "w", "cases": [
             {"label": "@ift", "value": "1"}, {"label": "@iff", "value": "2"}]}),
 
@@ -623,6 +630,59 @@ if __name__ == "__main__":
         TestCase("arg type + const", arg, "w 5", ["w", "5"]),
         TestCase("arg env + temp", arg, "env %count", ["env", "%count"]),
         TestCase("arg type + variadic", arg, "...", "..."),
+        TestCase("call - no ret, single arg", call, "call $incone(w %p)\n", {
+            'name': "$incone", 'args': [['w', '%p']], }),
+        TestCase("call - ret + two arg", call, "%r =s call $vadd(s %a, l %ap)\n", {
+            'ret_var': '%r', 'ret_type': 's', 'name': "$vadd", 'args': [['s', '%a'], ['l', '%ap']], }),
+        TestCase("call - ret + even + two arg", call, "%r =s call $vadd(env %b, s %a, l %ap)\n", {
+            'ret_var': '%r', 'ret_type': 's', 'name': "$vadd", 'args': [['env', '%b'], ['s', '%a'], ['l', '%ap']], }),
+
+        # Jump
+        TestCase("jump - unconditonal", jump, "jmp @loop\n", ["jmp", "@loop"]),
+        TestCase("jump - unconditonal (dir)", jump, "jmp @loop\n",
+                 {"jump": "jmp", "target": "@loop"}),
+        TestCase("jump - conditonal", jump, "jnz %x, @loop, @end\n", {
+            "jump": "jnz", "test": "%x", "notzero": "@loop", "zero": "@end"}),
+        TestCase("jump/ret - no value", jump, "ret\n",
+                 {"jump": "ret"}),
+        TestCase("jump/ret - const value", jump, "ret 8\n",
+                 {"jump": "ret", "ret_value": "8"}),
+        TestCase("jump/ret - var value", jump, "ret %y\n",
+                 {"jump": "ret", "ret_value": "%y"}),
+        TestCase("jump/htl (termination)", jump, "hlt\n", {"jump": "hlt"}),
+
+        # Block
+        TestCase("block - simple, no phis no jump", block, '@start\n\t%x =w copy 100\n\t%y =w copy 0\n', {
+            'label': '@start', 'phis': [], 'inst': [{'var': '%x', 'type': 'w', 'op': 'copy', 'p1': '100'},
+                                                    {'var': '%y', 'type': 'w', 'op': 'copy', 'p1': '0'}],
+                                                    "jump": []}),
+        TestCase("block - one phis, one inst, end with jump", block,
+                 """@loop
+                    %x =w phi @start 100, @loop %x1
+                    %x1 =w sub %x, 1
+                    jnz %x1, @loop, @end
+                 """, {
+                     'label': '@loop', 'phis': [{'var': "%x", "type": "w", "cases": [
+                         {"label": "@start", "value": "100"}, {"label": "@loop", "value": "%x1"}]}],
+                     'inst': [{'var': '%x1', 'type': 'w', 'op': 'sub', 'p1': '%x', 'p2': '1'}],
+                     "jump": {"jump": "jnz", "test": "%x1", "notzero": "@loop", "zero": "@end"}}),
+
+        TestCase("block - two phis, two inst, end with jump", block,
+                 """@loop
+                    %x =w phi @start 100, @loop %x1
+                    %y =l phi @start 30, @loop %x2
+                    %x1 =w sub %x, 1
+                    %x2 =w mul %y, 2
+                    jnz %x1, @loop, @end
+                 """, {
+                     'label': '@loop', 'phis': [{'var': "%x", "type": "w", "cases": [
+                         {"label": "@start", "value": "100"}, {"label": "@loop", "value": "%x1"}]},
+                         {'var': "%y", "type": "l", "cases": [
+                         {"label": "@start", "value": "30"}, {"label": "@loop", "value": "%x2"}]}],
+                     'inst': [{'var': '%x1', 'type': 'w', 'op': 'sub', 'p1': '%x', 'p2': '1'},
+                              {'var': '%x2', 'type': 'w', 'op': 'mul', 'p1': '%y', 'p2': '2'}],
+                     "jump": {"jump": "jnz", "test": "%x1", "notzero": "@loop", "zero": "@end"}}),
+
     ]
     Init()
     errors = test_elements(tests)
