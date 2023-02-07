@@ -73,17 +73,18 @@ reg_type = (user_type("type_name") + EQ + Optional(align) + LBRACE + Group(
     delimited_list(type_item, delim=',', allow_trailing_delim=True))("items") + RBRACE).set_name("regtype")
 opaque_type = (user_type("opaque_name") + EQ + align + LBRACE +
                integer("size") + RBRACE).set_name("opaque")
-type_def = (Keyword("type") + ((reg_type | opaque_type))).set_name("type_def")
+type_def = (Keyword("type")("elem") +
+            ((reg_type | opaque_type))).set_name("type_def")
 
 # Data
 data_item = (Group((global_ident("symbol") + Optional(Suppress(Char('+')) + integer("offset"))
                     ))("global") | QuotedString('"')("string") | const("const")).set_name("data_item")
 data_entry = ((ext_type("type") + (OneOrMore(Group(data_item)))("items")) |
               (Suppress(Literal('z')) + integer("zero_count"))).set_name("data_entry")
-data_def = (ZeroOrMore(linkage) + Keyword("data") + global_ident +
+data_def = (ZeroOrMore(linkage) + Keyword("data")("elem") + global_ident +
             EQ + Optional(align) + LBRACE +
             Group(delimited_list(Group(data_entry), delim=',',
-                                 allow_trailing_delim=True))("data_def") + RBRACE).set_name("data_ref")
+                                 allow_trailing_delim=True))("data_def") + RBRACE).set_name("data_def")
 
 
 # https://c9x.me/compile/doc/il.html#Phi
@@ -259,7 +260,7 @@ sub_word = (Literal('sb') | Literal('ub') | Literal(
 abi_type = (base_type | sub_word | user_type).set_name("abi_type")
 param = ((abi_type + temp) | (Keyword('env') + temp)
          | Literal("...")).set_name("param")
-func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function') + Optional(
+func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function')("elem") + Optional(
     abi_type("return_type")) + global_ident("name") + LPAR + Optional(delimited_list(
         Group(param), delim=',', allow_trailing_delim=True))("params") + RPAR + Optional(NL) + LBRACE + Optional(
             NL) + Group(ZeroOrMore(Group(block)))("blocks") + RBRACE + NL).set_name("func")
@@ -297,9 +298,8 @@ jump = (((Keyword("jmp")("jump") + label("target")) |
 block <<= (Optional(NL) + label("label") + NL + Group(ZeroOrMore(Group(phi)))("phis") +
            Group(ZeroOrMore((Group(instruct))))("inst") + Group(Optional(jump))("jump")).set_name("block")
 
-top = (Group(func_def)("func") | Group(type_def)("typedef")
-       | Group(data_def)("datadef")).set_name("top")
-qbe_file = Group(OneOrMore(Group(top)))("elems").set_name("qbe")
+top = (Group(func_def) | Group(type_def) | Group(data_def)).set_name("top")
+qbe_file = Group(OneOrMore(top))("elems").set_name("qbe")
 
 
 def ParseText(s: str, vebose: bool = False) -> ParserElement:
@@ -322,7 +322,8 @@ if __name__ == "__main__":
     for f in args.filename:
         try:
             print(f"------ '{f}' ------\n")
-            json_dict = ParseText(open(f, "r").read()+"\n").as_dict()
+            json_dict = ParseText(open(f, "r").read() +
+                                  "\n", args.verbose).as_dict()
             json.dump(json_dict, sys.stdout, indent=4, sort_keys=False)
         except ParseException as e:
             print(f"Parsing of '{f}' failed: {str(e)}", file=sys.stderr)
