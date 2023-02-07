@@ -5,7 +5,7 @@ from pyparsing.exceptions import ParseException
 from pyparsing import ParserElement
 
 
-def test_element(element: ParserElement, string: str, expected: str | list | None) -> bool:
+def test_element(element: ParserElement, string: str, expected: str | list | None, test: unittest.TestCase, ) -> bool:
     """
     element - the elemented to be tested
     string - input string
@@ -25,10 +25,18 @@ def test_element(element: ParserElement, string: str, expected: str | list | Non
 
     result = o.as_list()[0] if type(expected) == str else o.as_list() if type(
         expected) == list else o.as_dict()
-    if result != expected:
-        print(
-            f"test_element {element.name}: Error: Parse of '{string}' expected\n{expected}\ngot:\n{result}\nas list\n{o.as_list()}")
-        return False
+    if type(expected) == str:
+        test.assertEqual(expected, o.as_list()[
+                         0], msg=f"while parsing '{string}'")
+    elif type(expected) == list:
+        test.assertSequenceEqual(
+            expected, o.as_list(), msg=f"while parsing '{string}'")
+    elif type(expected) == dict:
+        test.maxDiff = 4096
+        test.assertDictEqual(expected, o.as_dict(),
+                             msg=f"while parsing '{string}'")
+    else:
+        raise Exception(f"internal: unknown expected type {type(expected)}")
     print(f"test_element {element.name}: Success: '{string}' -> '{expected}'")
     return True
 
@@ -41,11 +49,11 @@ class TestCase(object):
         self.expected = expected
 
 
-def test_elements(tests: TestCase, stop_on_errors=False) -> int:
+def test_elements(tests: TestCase, test: unittest.TestCase, stop_on_errors=False) -> int:
     errors: int = 0
     for t in tests:
         print(f"# Run test '{t.name}' on element <{t.element}>")
-        if test_element(t.element, t.string, t.expected):
+        if test_element(t.element, t.string, t.expected, test):
             continue
         errors += 1
         if stop_on_errors:
@@ -62,7 +70,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("integer zero", qbe.integer, "00", "00"),
             TestCase("(Neg) integer negative", qbe.integer, "-1", None),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_ident(self):
         tests = [
@@ -78,7 +86,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("ident - Mix char+num+..._..+char",
                      qbe.ident, "B1aa_5z", "B1aa_5z"),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_types(self):
         tests = [
@@ -87,7 +95,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("temp type", qbe.temp, "%a4", "%a4"),
             TestCase("label type", qbe.label, "@a_", "@a_"),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_floats(self):
         tests = [
@@ -110,7 +118,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("single", qbe.single_float, "s_1.0", "s_1.0"),
             TestCase("double", qbe.double_float, "d_1.0e5", "d_1.0e5"),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_value(self):
         tests = [
@@ -118,7 +126,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("value - temp", qbe.value, "%hello", "%hello"),
             TestCase("value - inter", qbe.value, "44", "44"),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_type_char(self):
         tests = [
@@ -127,7 +135,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("ext long", qbe.ext_type, "l", "l"),
             TestCase("ext half", qbe.ext_type, "h", "h"),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_const(self):
         tests = [
@@ -137,7 +145,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("const (single)", qbe.const, "s_0.7", "s_0.7"),
             TestCase("const (double)", qbe.const, "d_0.7e6", "d_0.7e6"),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_linkage(self):
         tests = [
@@ -157,7 +165,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("linkage section + flags", qbe.linkage,
                      'section "hello" "flags"', ['section', 'hello', 'flags']),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_typedef(self):
         tests = [
@@ -179,7 +187,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("typedef reg single", qbe.type_def,
                      'type :fi1 = { h} # a comment', {'type_name': ':fi1', 'elem': 'type', 'items': [{'type': 'h'}]}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_datadef(self):
         tests = [
@@ -208,7 +216,7 @@ class TestQBEParsing(unittest.TestCase):
                 {"type": "l", "items": [{"const": "-1"}]},
                 {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_arithmetics(self):
         tests = [
@@ -244,7 +252,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("shl w + w", qbe.i_shl, "%y =w shl %w, %y\n",
                      {'var': '%y', 'type': 'w', 'op': 'shl', 'p1': '%w', 'p2': '%y'}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_memstores(self):
         tests = [
@@ -261,7 +269,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("store b -> m", qbe.i_storeb, "storeb %w, %y\n",
                      {'op': 'storeb', 'p1': '%w', 'p2': '%y'}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_memloads(self):
         tests = [
@@ -286,7 +294,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("load ub -> m", qbe.i_loadub, "%z =w loadub %w\n",
                      {'var': '%z', 'type': 'w', 'op': 'loadub', 'p1': '%w'}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_alloc(self):
         tests = [
@@ -298,7 +306,7 @@ class TestQBEParsing(unittest.TestCase):
                      {'var': '%z', 'type': 'l', 'op': 'alloc16', 'p1': '%w'}),
 
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_comparators(self):
         tests = [
@@ -308,7 +316,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("cod d d", qbe.i_cod, "%z =l cod %w, %y\n",
                      {'var': '%z', 'type': 'l', 'op': 'cod', 'p1': '%w', 'p2': '%y'}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_conversions(self):
         tests = [
@@ -346,7 +354,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("convert unsigned l to F", qbe.i_ultof, "%z =d ultof %l\n",
                      {'var': '%z', 'type': 'd', 'op': 'ultof', 'p1': '%l'}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_casts(self):
         tests = [
@@ -355,7 +363,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("copy w -> w", qbe.i_copy, "%z =w copy %w\n",
                      {'var': '%z', 'type': 'w', 'op': 'copy', 'p1': '%w'}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_call(self):
         tests = [
@@ -370,7 +378,7 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("call - ret + even + two arg", qbe.call, "%r =s call $vadd(env %b, s %a, l %ap)\n", {
                 'ret_var': '%r', 'op': 'call', 'ret_type': 's', 'name': "$vadd", 'args': [['env', '%b'], ['s', '%a'], ['l', '%ap']], }),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_jump(self):
         tests = [
@@ -389,14 +397,14 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("jump/htl (termination)", qbe.jump,
                      "hlt\n", {"jump": "hlt"}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_phi(self):
         tests = [
             TestCase("phi ret + single user param", qbe.phi, "%y =w phi @ift 1, @iff 2\n", {'var': "%y", "type": "w", "cases": [
                 {"label": "@ift", "value": "1"}, {"label": "@iff", "value": "2"}]}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_block(self):
         tests = [
@@ -431,7 +439,7 @@ class TestQBEParsing(unittest.TestCase):
                                   {'var': '%x2', 'type': 'w', 'op': 'mul', 'p1': '%y', 'p2': '2'}],
                          "jump": {"jump": "jnz", "test": "%x1", "notzero": "@loop", "zero": "@end"}}),
         ]
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
     def test_function(self):
         f1 = '''function $loop() {
@@ -439,7 +447,8 @@ class TestQBEParsing(unittest.TestCase):
                     @loop
                             %x =w phi @start 100, @loop %x1
                             %x1 =w sub %x, 1
-                            jnz %x1, @loop, @end
+                            %x2 =w call $add_two(w %x1, w %x2)
+                            jnz %x2, @loop, @end
                     @end
                             ret
                     }
@@ -469,13 +478,14 @@ class TestQBEParsing(unittest.TestCase):
                             {'label': '@start', 'value': '100'},
                             {'label': '@loop', 'value': '%x1'}]
                          }],
-                        'inst': [{'var': '%x1', 'type': 'w', 'op': 'sub', 'p1': '%x', 'p2': '1'}],
-                        'jump': {'jump': 'jnz', 'test': '%x1', 'notzero': '@loop', 'zero': '@end'}},
+                        'inst': [{'var': '%x1', 'type': 'w', 'op': 'sub', 'p1': '%x', 'p2': '1'},
+                                 {'ret_var': '%x2', 'op': 'call', 'ret_type': 'w', 'name': "$add_two", 'args': [['w', '%x1'], ['w', '%x2']]}],
+                        'jump': {'jump': 'jnz', 'test': '%x2', 'notzero': '@loop', 'zero': '@end'}},
                     {'label': '@end', 'phis': [], 'inst': [], 'jump': {'jump': 'ret'}}]}
             ),
         ]
 
-        self.assertEqual(test_elements(tests), 0)
+        self.assertEqual(test_elements(tests, self), 0)
 
 
 if __name__ == '__main__':
