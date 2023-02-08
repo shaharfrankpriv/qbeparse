@@ -9,6 +9,11 @@ from pyparsing.testing import pyparsing_test as ppt
 import re
 import sys
 
+# Global constants
+ELEM_DATA = "data"
+ELEM_TYPE = "type"
+ELEM_FUNC = "function"
+
 # newline is not to be ignored!
 ParserElement.set_default_whitespace_chars(' \t')
 __diag__.enable_all_warnings()
@@ -79,7 +84,7 @@ union_type = (user_type("name") + EQ + Optional(align) + LBRACE +
                     OneOrMore(LBRACE + type_item + RBRACE))("union") + RBRACE).set_name("untiontype")
 opaque_type = (user_type("name") + EQ + align + LBRACE +
                integer("size") + RBRACE).set_name("opaque")
-type_def = (Keyword("type")("elem") +
+type_def = (Keyword(ELEM_TYPE)("elem") +
             ((reg_type | union_type | opaque_type)) + NL).set_name("type_def")
 
 # Data
@@ -87,7 +92,7 @@ data_item = (Group((global_ident("symbol") + Optional(Suppress(Char('+')) + inte
                     ))("global") | QuotedString('"')("string") | const("const")).set_name("data_item")
 data_entry = ((ext_type("type") + (OneOrMore(Group(data_item)))("items")) |
               (Suppress(Literal('z')) + integer("zero_count"))).set_name("data_entry")
-data_def = (ZeroOrMore(linkage) + Keyword("data")("elem") + global_ident("name") +
+data_def = (ZeroOrMore(linkage) + Keyword(ELEM_DATA)("elem") + global_ident("name") +
             EQ + Optional(align) + LBRACE +
             Group(delimited_list(Group(data_entry), delim=',',
                                  allow_trailing_delim=True))("data_def") + RBRACE + NL).set_name("data_def")
@@ -266,7 +271,7 @@ sub_word = (Literal('sb') | Literal('ub') | Literal(
 abi_type = (base_type | sub_word | user_type).set_name("abi_type")
 param = ((abi_type + temp) | (Keyword('env') + temp)
          | Literal("...")).set_name("param")
-func_def = (ZeroOrMore(linkage)("linkage") + Keyword('function')("elem") + Optional(
+func_def = (ZeroOrMore(linkage)("linkage") + Keyword(ELEM_FUNC)("elem") + Optional(
     abi_type("return_type")) + global_ident("name") + LPAR + Optional(delimited_list(
         Group(param), delim=',', allow_trailing_delim=True))("params") + RPAR + Optional(NL) + LBRACE + Optional(
             NL) + Group(ZeroOrMore(Group(block)))("blocks") + RBRACE + NL).set_name("func")
