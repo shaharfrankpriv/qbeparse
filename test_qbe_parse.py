@@ -183,9 +183,9 @@ class TestQBEParsing(unittest.TestCase):
                      ':opaque = align 16 { 32 }', None),
 
             TestCase("typedef opaque", qbe.type_def,
-                     'type :opaque = align 16 { 32 }', {'opaque_name': ':opaque', 'elem': 'type', 'align': '16', 'size': '32'}),
+                     'type :opaque = align 16 { 32 }\n', {'opaque_name': ':opaque', 'elem': 'type', 'align': '16', 'size': '32'}),
             TestCase("typedef reg single", qbe.type_def,
-                     'type :fi1 = { h} # a comment', {'type_name': ':fi1', 'elem': 'type', 'items': [{'type': 'h'}]}),
+                     'type :fi1 = { h} # a comment\n', {'type_name': ':fi1', 'elem': 'type', 'items': [{'type': 'h'}]}),
         ]
         self.assertEqual(test_elements(tests, self), 0)
 
@@ -207,12 +207,12 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("data_entry long global", qbe.data_entry, "l $c", {
                 "type": "l", "items": [{"global": {"symbol": "$c"}}]}),
 
-            TestCase("data_def, 2 type lists", qbe.data_def, "data $a = { w 1 2 3, b 0 }",
+            TestCase("data_def, 2 type lists", qbe.data_def, "data $a = { w 1 2 3, b 0 }\n",
                      {'elem': 'data', "data_def": [{"type": "w", "items": [{"const": "1"}, {"const": "2"}, {"const": "3"}]},
                                                    {"type": "b", "items": [{"const": "0"}]}]}),
             TestCase("data_def clear bytes", qbe.data_def,
-                     "data $b = {z 10}", {'elem': 'data', "data_def": [{"zero_count": "10"}]}),
-            TestCase("data_def long neg const, long global", qbe.data_def, "data $c = { l -1, l $c }", {'elem': 'data', "data_def": [
+                     "data $b = {z 10}\n", {'elem': 'data', "data_def": [{"zero_count": "10"}]}),
+            TestCase("data_def long neg const, long global", qbe.data_def, "data $c = { l -1, l $c }\n", {'elem': 'data', "data_def": [
                 {"type": "l", "items": [{"const": "-1"}]},
                 {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
         ]

@@ -74,7 +74,7 @@ reg_type = (user_type("type_name") + EQ + Optional(align) + LBRACE + Group(
 opaque_type = (user_type("opaque_name") + EQ + align + LBRACE +
                integer("size") + RBRACE).set_name("opaque")
 type_def = (Keyword("type")("elem") +
-            ((reg_type | opaque_type))).set_name("type_def")
+            ((reg_type | opaque_type)) + NL).set_name("type_def")
 
 # Data
 data_item = (Group((global_ident("symbol") + Optional(Suppress(Char('+')) + integer("offset"))
@@ -84,7 +84,7 @@ data_entry = ((ext_type("type") + (OneOrMore(Group(data_item)))("items")) |
 data_def = (ZeroOrMore(linkage) + Keyword("data")("elem") + global_ident +
             EQ + Optional(align) + LBRACE +
             Group(delimited_list(Group(data_entry), delim=',',
-                                 allow_trailing_delim=True))("data_def") + RBRACE).set_name("data_def")
+                                 allow_trailing_delim=True))("data_def") + RBRACE + NL).set_name("data_def")
 
 
 # https://c9x.me/compile/doc/il.html#Phi
@@ -302,10 +302,14 @@ top = (Group(func_def) | Group(type_def) | Group(data_def)).set_name("top")
 qbe_file = Group(OneOrMore(top))("elems").set_name("qbe")
 
 
-def ParseText(s: str, vebose: bool = False) -> ParserElement:
+def ParseText(s: str, verbose: bool = False, debug: bool = False) -> ParserElement:
     # autoname_elements()
-    # block.set_debug()
-    if vebose:
+    qbe_file.set_debug(debug)
+    func_def.set_debug(debug)
+    type_def.set_debug(debug)
+    data_def.set_debug(debug)
+    block.set_debug(debug)
+    if verbose:
         print(ppt.with_line_numbers(s))
     return qbe_file.parseString(s)
 
@@ -318,12 +322,13 @@ if __name__ == "__main__":
     parser.add_argument('filename', metavar='Filename',
                         nargs='+',)           # positional argument
     parser.add_argument('-v', '--verbose', action='store_true')  # on/off flag
+    parser.add_argument('-d', '--debug', action='store_true')  # on/off flag
     args = parser.parse_args()
     for f in args.filename:
         try:
             print(f"------ '{f}' ------\n")
             json_dict = ParseText(open(f, "r").read() +
-                                  "\n", args.verbose).as_dict()
+                                  "\n", verbose=args.verbose, debug=args.debug).as_dict()
             json.dump(json_dict, sys.stdout, indent=4, sort_keys=False)
         except ParseException as e:
             print(f"Parsing of '{f}' failed: {str(e)}", file=sys.stderr)
