@@ -3,6 +3,7 @@
 # Based on the doc: https://www.google.com/search?q=qbe+ir+reference&oq=qbe+ir+reference&aqs=chrome..69i57j33i10i160l2.5470j0j7&sourceid=chrome&ie=UTF-8
 
 import argparse
+from typing import List
 import json
 from pyparsing import *
 from pyparsing.testing import pyparsing_test as ppt
@@ -119,7 +120,7 @@ def inst1(name: str, ret: Char, p1: Char, group: list):
     return inst.set_name(name)
 
 
-def inst2(name: str, ret: Char, p1: Char, p2: Char, group: list):
+def inst2(name: str, ret: Char | None, p1: Char, p2: Char, group: list):
     prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
     body = Keyword(name)("op") + value("p1") + COMMA + value("p2") + NL
     inst = (prefix + body) if ret else body
@@ -128,7 +129,7 @@ def inst2(name: str, ret: Char, p1: Char, p2: Char, group: list):
 
 
 # Arithmetic and Bits
-arithmetic = []
+arithmetic: List[ParserElement] = []
 i_add = inst2("add", t_T, t_T, t_T, arithmetic)
 i_sub = inst2("sub", t_T, t_T, t_T, arithmetic)
 i_div = inst2("div", t_T, t_T, t_T, arithmetic)
@@ -147,7 +148,7 @@ i_shr = inst2("shr", t_I, t_I, Char('ww'), arithmetic)
 i_shl = inst2("shl", t_I, t_I, Char('ww'), arithmetic)
 
 # https://c9x.me/compile/doc/il.html#Memory
-mem_store = []
+mem_store: List[ParserElement] = []
 i_stored = inst2("stored", None, t_d, t_m, mem_store)
 i_stores = inst2("stores", None, t_s, t_m, mem_store)
 i_storel = inst2("storel", None, t_l, t_m, mem_store)
@@ -155,7 +156,7 @@ i_storew = inst2("storew", None, t_w, t_m, mem_store)
 i_storeh = inst2("storeh", None, t_w, t_m, mem_store)
 i_storeb = inst2("storeb", None, t_w, t_m, mem_store)
 
-mem_load = []
+mem_load: List[ParserElement] = []
 t_mm = Char('mm')
 i_loadd = inst1("loadd", t_d, t_m, mem_load)
 i_loads = inst1("loads", t_s, t_m, mem_load)
@@ -169,14 +170,14 @@ i_loaduh = inst1("loaduh", t_I, t_mm, mem_load)
 i_loadub = inst1("loadub", t_I, t_mm, mem_load)
 
 # Stack allocation. alloc4 is alloc bytes align on 4
-stack_alloc = []
+stack_alloc: List[ParserElement] = []
 i_alloc4 = inst1("alloc4", t_m, t_l, stack_alloc)
 i_alloc8 = inst1("alloc8", t_m, t_l, stack_alloc)
 i_alloc16 = inst1("alloc16", t_m, t_l, stack_alloc)
 
 # https://c9x.me/compile/doc/il.html#Comparisons
 
-comparators = []
+comparators: List[ParserElement] = []
 
 
 def BuildIntegerComparators():
@@ -226,7 +227,7 @@ BuildIntegerComparators()
 BuildFloatComparators()
 
 # https://c9x.me/compile/doc/il.html#Conversions
-conversions = []
+conversions: List[ParserElement] = []
 i_extsw = inst1("extsw", t_l, t_w, conversions)  # extend signed w -> l
 i_extuw = inst1("extuw", t_l, t_w, conversions)  # extend unsigned w -> l
 # extend signed h -> l/w
@@ -257,7 +258,7 @@ i_sltof = inst1("sltof", t_F, Char('ll'), conversions)
 i_ultof = inst1("ultof", t_F, Char('ll'), conversions)
 
 # https://c9x.me/compile/doc/il.html#Cast-and-Copy
-casts = []
+casts: List[ParserElement] = []
 # cast the param to the ret type (same size)
 i_cast = inst1("cast", Char('wlsd'), Char('sdwl'), casts)
 # copy the param to the dest (same type)
@@ -313,7 +314,7 @@ top = (Group(func_def) | Group(type_def) | Group(data_def)).set_name("top")
 qbe_file = Group(OneOrMore(top))("elems").set_name("qbe")
 
 
-def ParseText(s: str, verbose: bool = False, debug: bool = False) -> ParserElement:
+def ParseText(s: str, verbose: bool = False, debug: bool = False) -> ParseResults:
     # autoname_elements()
     qbe_file.set_debug(debug)
     func_def.set_debug(debug)

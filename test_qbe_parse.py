@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+from typing import List
 import qbeparse as qbe
 import unittest
 from pyparsing.exceptions import ParseException
 from pyparsing import ParserElement
 
 
-def test_element(element: ParserElement, string: str, expected: str | list | None, test: unittest.TestCase, ) -> bool:
+def test_element(element: ParserElement, string: str, expected: str | list | dict | None, test: unittest.TestCase, ) -> bool:
     """
     element - the elemented to be tested
     string - input string
@@ -49,7 +50,7 @@ class TestCase(object):
         self.expected = expected
 
 
-def test_elements(tests: TestCase, test: unittest.TestCase, stop_on_errors=False) -> int:
+def test_elements(tests: List[TestCase], test: unittest.TestCase, stop_on_errors=False) -> int:
     errors: int = 0
     for t in tests:
         print(f"# Run test '{t.name}' on element <{t.element}>")

@@ -14,6 +14,7 @@ class Qbe(object):
     debug: bool
     file: str
     elem_summary: bool
+    qbe_dict: dict
 
     def __init__(self, filename: str, args: argparse.Namespace):
         self.file = filename
@@ -62,12 +63,13 @@ class Qbe(object):
         else:
             raise Exception(f"Internal: bad elem type {elem}")
 
-    def ProcessFile(self) -> ParserElement:
+    def ProcessFile(self) -> None:
         self.Verbose(f"ProcessFile: process file '{self.file}'")
         self.qbe_dict = qbe.ParseText(
             open(self.file, "r").read() + "\n").as_dict()
         for e in self.qbe_dict["elems"]:
             self.ProcessElem(e)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -76,9 +78,12 @@ if __name__ == "__main__":
         epilog='')
     parser.add_argument('filename', metavar='Filename',
                         nargs='+',)           # positional argument
-    parser.add_argument('-v', '--verbose', action='store_true', help="trace processing flow.")  # on/off flag
-    parser.add_argument('-d', '--debug', action='store_true', help='show raw dict (after parsing).')  # on/off flag
-    parser.add_argument('-e', '--elem', action='store_true', help='only list elements.')  # on/off flag
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help="trace processing flow.")  # on/off flag
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help='show raw dict (after parsing).')  # on/off flag
+    parser.add_argument('-e', '--elem', action='store_true',
+                        help='only list elements.')  # on/off flag
     args = parser.parse_args()
     for f in args.filename:
         try:
