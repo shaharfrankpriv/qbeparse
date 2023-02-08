@@ -11,6 +11,8 @@ import sys
 
 # newline is not to be ignored!
 ParserElement.set_default_whitespace_chars(' \t')
+__diag__.enable_all_warnings()
+#__diag__.enable_debug_on_named_expressions = True
 
 ident = Word(alphas + "_" + '.', alphanums + "_" + ".").set_name("ident")
 integer = Word(nums).set_name("integer")
