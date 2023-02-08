@@ -20,7 +20,7 @@ def test_element(element: ParserElement, string: str, expected: str | list | Non
             return True
         else:
             print(
-                f"test_element {element.name}: Error: Parse of '{string}' failed: '{str(e)}'.")
+                f"#### test_element {element.name}: Error: Parse of '{string}' failed: '{str(e)}'.")
             return False
 
     result = o.as_list()[0] if type(expected) == str else o.as_list() if type(
@@ -170,22 +170,32 @@ class TestQBEParsing(unittest.TestCase):
     def test_typedef(self):
         tests = [
             TestCase("reg_type single", qbe.reg_type,
-                     ':fi1 = { h}', {'type_name': ':fi1', 'items': [{'type': 'h'}]}),
+                     ':fi1 = { h}', {'name': ':fi1', 'members': [{'type': 'h'}]}),
             TestCase("reg_type fourfloats", qbe.reg_type,
-                     ':fourfloats = { s, s, d, d }', {'type_name': ':fourfloats', 'items': [{'type': 's'}, {'type': 's'}, {'type': 'd'}, {'type': 'd'}]}),
+                     ':fourfloats = { s, s, d, d }', {'name': ':fourfloats', 'members': [{'type': 's'}, {'type': 's'}, {'type': 'd'}, {'type': 'd'}]}),
             TestCase("reg_type fourfloats", qbe.reg_type,
-                     ':abyteandmanywords = { b, w 100 }', {'type_name': ':abyteandmanywords', 'items': [{'type': 'b'}, {'type': 'w', 'repeat': '100'}]}),
+                     ':abyteandmanywords = { b, w 100 }', {'name': ':abyteandmanywords', 'members': [{'type': 'b'}, {'type': 'w', 'repeat': '100'}]}),
             TestCase("reg_type with align", qbe.reg_type,
-                     ':cryptovector = align 16 { w 4 }', {'type_name': ':cryptovector', 'align': '16', 'items': [{'type': 'w', 'repeat': '4'}]}),
-            TestCase("opaque_type with align", qbe.opaque_type,
-                     ':opaque = align 16 { 32 }', {'opaque_name': ':opaque', 'align': '16', 'size': '32'}),
+                     ':cryptovector = align 16 { w 4 }', {'name': ':cryptovector', 'align': '16', 'members': [{'type': 'w', 'repeat': '4'}]}),
             TestCase("(NEG) opaque_type as reg", qbe.reg_type,
                      ':opaque = align 16 { 32 }', None),
 
+            TestCase("union_type", qbe.union_type,
+                     ':union =  { { w } { l } }', {'name': ':union', 'union': [{'type': 'w'}, {'type': 'l'}]}),
+
+            TestCase("opaque_type with align", qbe.opaque_type,
+                     ':opaque = align 16 { 32 }', {'name': ':opaque', 'align': '16', 'size': '32'}),
+
             TestCase("typedef opaque", qbe.type_def,
-                     'type :opaque = align 16 { 32 }\n', {'opaque_name': ':opaque', 'elem': 'type', 'align': '16', 'size': '32'}),
+                     'type :opaque = align 16 { 32 }\n', {'name': ':opaque', 'elem': 'type', 'align': '16', 'size': '32'}),
             TestCase("typedef reg single", qbe.type_def,
-                     'type :fi1 = { h} # a comment\n', {'type_name': ':fi1', 'elem': 'type', 'items': [{'type': 'h'}]}),
+                     'type :fi1 = { h} # a comment\n', {'name': ':fi1', 'elem': 'type', 'members': [{'type': 'h'}]}),
+
+            TestCase("typedef union", qbe.type_def,
+                     'type :.2 = { { w } { l } { b 8 } }\n', {
+                         'name': ':.2', 'elem': 'type', 'union': [
+                             {'type': 'w'}, {'type': 'l'}, {'type': 'b', 'repeat': '8'}]}),
+
         ]
         self.assertEqual(test_elements(tests, self), 0)
 
@@ -208,11 +218,11 @@ class TestQBEParsing(unittest.TestCase):
                 "type": "l", "items": [{"global": {"symbol": "$c"}}]}),
 
             TestCase("data_def, 2 type lists", qbe.data_def, "data $a = { w 1 2 3, b 0 }\n",
-                     {'elem': 'data', "data_def": [{"type": "w", "items": [{"const": "1"}, {"const": "2"}, {"const": "3"}]},
-                                                   {"type": "b", "items": [{"const": "0"}]}]}),
+                     {'elem': 'data', "name": "$a", "data_def": [{"type": "w", "items": [{"const": "1"}, {"const": "2"}, {"const": "3"}]},
+                                                                 {"type": "b", "items": [{"const": "0"}]}]}),
             TestCase("data_def clear bytes", qbe.data_def,
-                     "data $b = {z 10}\n", {'elem': 'data', "data_def": [{"zero_count": "10"}]}),
-            TestCase("data_def long neg const, long global", qbe.data_def, "data $c = { l -1, l $c }\n", {'elem': 'data', "data_def": [
+                     "data $b = {z 10}\n", {'elem': 'data', "name": "$b", "data_def": [{"zero_count": "10"}]}),
+            TestCase("data_def long neg const, long global", qbe.data_def, "data $c = { l -1, l $c }\n", {'elem': 'data', "name": "$c", "data_def": [
                 {"type": "l", "items": [{"const": "-1"}]},
                 {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
         ]

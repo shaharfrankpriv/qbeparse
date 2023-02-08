@@ -69,19 +69,22 @@ sub_type = (ext_type | user_type).set_name("sub_type")
 type_item = Group(ext_type("type") +
                   Optional(integer("repeat"))).set_name("type_item")
 align = Keyword('align') + integer("align")
-reg_type = (user_type("type_name") + EQ + Optional(align) + LBRACE + Group(
-    delimited_list(type_item, delim=',', allow_trailing_delim=True))("items") + RBRACE).set_name("regtype")
-opaque_type = (user_type("opaque_name") + EQ + align + LBRACE +
+reg_type = (user_type("name") + EQ + Optional(align) + LBRACE + Group(
+    delimited_list(type_item, delim=',', allow_trailing_delim=True))("members") + RBRACE).set_name("regtype")
+# The union type is not documented but is practically used by cproc to encode c untions!
+union_type = (user_type("name") + EQ + Optional(align) + LBRACE +
+              Group((LBRACE + type_item + RBRACE) + OneOrMore(LBRACE + type_item + RBRACE))("union") + RBRACE).set_name("untiontype")
+opaque_type = (user_type("name") + EQ + align + LBRACE +
                integer("size") + RBRACE).set_name("opaque")
 type_def = (Keyword("type")("elem") +
-            ((reg_type | opaque_type)) + NL).set_name("type_def")
+            ((reg_type | union_type | opaque_type)) + NL).set_name("type_def")
 
 # Data
 data_item = (Group((global_ident("symbol") + Optional(Suppress(Char('+')) + integer("offset"))
                     ))("global") | QuotedString('"')("string") | const("const")).set_name("data_item")
 data_entry = ((ext_type("type") + (OneOrMore(Group(data_item)))("items")) |
               (Suppress(Literal('z')) + integer("zero_count"))).set_name("data_entry")
-data_def = (ZeroOrMore(linkage) + Keyword("data")("elem") + global_ident +
+data_def = (ZeroOrMore(linkage) + Keyword("data")("elem") + global_ident("name") +
             EQ + Optional(align) + LBRACE +
             Group(delimited_list(Group(data_entry), delim=',',
                                  allow_trailing_delim=True))("data_def") + RBRACE + NL).set_name("data_def")
