@@ -117,7 +117,9 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("float - exponet neg", qbe.float_num, "1e-5", "1e-5"),
 
             TestCase("single", qbe.single_float, "s_1.0", "s_1.0"),
+            TestCase("single no exp", qbe.single_float, "s_1", "s_1"),
             TestCase("double", qbe.double_float, "d_1.0e5", "d_1.0e5"),
+            TestCase("double no exp", qbe.double_float, "d_1", "d_1"),
         ]
         self.assertEqual(test_elements(tests, self), 0)
 

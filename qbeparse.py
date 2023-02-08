@@ -55,14 +55,15 @@ float_num = (Combine(Optional(sign) + Optional(integer) + Char('.') +
     Optional(sign) + integer +
     Optional(Char('.') + integer)
     + exponent)).set_name("float")
-single_float = Combine(Literal('s_') + float_num).set_name("single")
-double_float = Combine(Literal('d_') + float_num).set_name("double")
+single_float = Combine(Literal('s_') + (float_num|integer)).set_name("single")
+double_float = Combine(Literal('d_') + (float_num|integer)).set_name("double")
 
-value = (global_ident | temp | integer).set_name("value")
 
 # https://c9x.me/compile/doc/il.html#Constants
 const = (Combine(
     Optional('-') + integer) | single_float | double_float | global_ident).set_name("const")
+
+value = (const | temp).set_name("value")
 
 # https://c9x.me/compile/doc/il.html#Linkage
 secname = QuotedString('"').set_name("secname")
