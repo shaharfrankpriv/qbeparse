@@ -192,9 +192,9 @@ class TestQBEParsing(unittest.TestCase):
                      'type :fi1 = { h} # a comment\n', {'name': ':fi1', 'elem': 'type', 'members': [{'type': 'h'}]}),
 
             TestCase("typedef union", qbe.type_def,
-                     'type :.2 = { { w } { l } { b 8 } }\n', {
+                     'type :.2 = { { w } { l } { b 8 } { :.3 } }\n', {
                          'name': ':.2', 'elem': 'type', 'union': [
-                             {'type': 'w'}, {'type': 'l'}, {'type': 'b', 'repeat': '8'}]}),
+                             {'type': 'w'}, {'type': 'l'}, {'type': 'b', 'repeat': '8'}, {'type': ':.3'}]}),
 
         ]
         self.assertEqual(test_elements(tests, self), 0)
