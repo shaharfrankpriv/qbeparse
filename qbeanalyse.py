@@ -68,17 +68,31 @@ class Value(object):
             else:
                 self.const = int(self.val[2:])
 
+    def __str__(self):
+        s = f"{self.vcsope.value}{self.val}"
+        if self.const is not None:
+            s += f"({self.const})"
 
-class PhiCases(object):
+
+class PhiCase(object):
     def __init__(self, label: str, value: Value):
         self.label = label
-        self.value = Value
+        self.value = value
+
+    def __str__(self) -> str:
+        return f"({self.label} -> {str(self.value)})"
 
 
 class Phi(object):
-    def __init__(self, var: Var, cases: List[PhiCases]):
+    def __init__(self, var: Var, cases: List[PhiCase]):
         self.var = var
         self.cases = cases
+
+    def __str__(self):
+        s = f"{str(self.var)}"
+        for c in self.cases:
+            s += f" {str(c)}"
+        return s
 
 
 class JType(enum.Enum):
@@ -145,22 +159,46 @@ class Qbe(object):
                 out += [Var(p[0], p[0])]
         return out
 
-    def ProcessBlock(self, blocks: List):
-        # self.Verbose(f"ProcessBlock: process {name}")
+    def ProcessPhi(self, func: Function, e: dict) -> Phi:
+        var: Var = Var(e["var"], e["type"])
+        cases: List[PhiCase] = []
+        for c in e["cases"]:
+            cases.append(PhiCase(c["label"], c["value"]))
+        return Phi(var, cases)
+
+    def ProcessJump(self, func: Function, e: dict):
+        pass
+
+    def ProcessBlock(self, func: Function, e: dict, next: str | None) -> Block:
+        label = e["label"]
+        phis: List[Phi] = []
+        self.Verbose(f"ProcessBlock: [{func.name}] process {label}")
+        for p in e["phis"]:
+            phi = self.ProcessPhi(func, p)
+            phis.append(phi)
+            self.Verbose(f"ProcessBlock: [{func.name}] \tphi {str(phi)}")
+        jdir = e.get("jump", None)
+        jump = self.ProcessJump(func, jdir)
         # self.Debug(name, e)
-        return
+        return Block(label, phis=phis, jump=jump)
 
     def ProcessFunction(self, e: dict):
         name = f'{e["elem"]} {e["name"]}'
         ret = e.get("return_type", None)
-        params = self.ProcessParams(e["params"])
+        params = self.ProcessParams(e.get("params", []))
         self.Verbose(f"ProcessFunction: process {name}")
-
         self.Verbose(
             f"ProcessFunction: \tParams: {Var.ListStr(params)} -> {ret}")
+        func = Function(name, params=params, ret=ret)
+        self.functions.append(func)
         self.Debug(name, e)
-        for b in e["blocks"]:
-            self.ProcessBlock(b)
+        nblocks = len(e["blocks"])
+        for bi in range(nblocks):
+            b = e['blocks'][bi]
+            next_label = None
+            if bi + 1 < nblocks:
+                next_label = e['blocks'][bi+1]["label"]
+            func.AddBlock(self.ProcessBlock(func, b, next=next_label))
 
     def ProcessType(self, e: dict):
         name = f'{e["elem"]} {e["name"]}'

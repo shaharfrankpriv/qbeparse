@@ -311,7 +311,7 @@ jump = (((Keyword("jmp")("jump") + label("target")) |
 block <<= (Optional(NL) + label("label") + NL + Group(ZeroOrMore(Group(phi)))("phis") +
            Group(ZeroOrMore((Group(instruct))))("inst") + Group(Optional(jump))("jump")).set_name("block")
 
-top = (Group(func_def) | Group(type_def) | Group(data_def)).set_name("top")
+top = (Group(func_def) | Group(type_def) | Group(data_def) | NL | COMMENT).set_name("top")
 qbe_file = Group(OneOrMore(top))("elems").set_name("qbe")
 
 
