@@ -22,7 +22,7 @@ class VScope(enum.Enum):
         scopes = [cls.GLOBAL, cls.TEMP, cls.LABEL, cls.USER]
         if name[0] in map(lambda x: x.value, scopes):
             return VScope(name[0]), name[1:]
-        return cls.CONST, name[1:]
+        return cls.CONST, name
 
 
 class VType(enum.Enum):
@@ -53,7 +53,7 @@ class Var(object):
 
     @classmethod
     def ListStr(cls, l: List['Var']) -> str:
-        return " ".join(map(lambda x: str(x), l))
+        return "(" + " ".join(map(lambda x: str(x), l)) + ")"
 
 
 class Value(object):
@@ -66,12 +66,16 @@ class Value(object):
             if self.val[:2] in ['_s', '_d']:
                 self.const = float(self.val[2:])
             else:
-                self.const = int(self.val[2:])
+                self.const = int(self.val)
 
     def __str__(self):
-        s = f"{self.vcsope.value}{self.val}"
+        if self.vscope == VScope.CONST:
+            return f"{self.const}"
+        else:
+            s = f"{self.vscope.value}{self.val}"
         if self.const is not None:
-            s += f"({self.const})"
+            s += f" ({self.const})"
+        return s
 
 
 class PhiCase(object):
@@ -101,21 +105,79 @@ class JType(enum.Enum):
     JNZ = "jnz"
     HLT = "hlt"
 
+    @classmethod
+    def Name2Jtype(cls, name: str) -> 'JType':
+        values = ["jmp", "ret", "jnz", "hlt"]
+        if name in values:
+            return JType(name)
+        raise Exception(f"JType: bad type {name}")
+
 
 class Jump(object):
-    def __init__(self, true: str | None, false: str | None,
-                 jtype: JType, ret: Value | None = None):
+    def __init__(self, jtype: JType, true: str | None = None, false: str | None = None,
+                 value: Value | None = None):
         self.jtype = jtype
         self.true = true    # unconditional label or true (nonzero) label
         self.false = false  # conditional false label, else None
-        self.ret = ret      # optional ret value, else None
+        self.value = value      # optional ret value, else None
+
+    def __str__(self):
+        s = f"{self.jtype.value}"
+        if self.jtype == JType.HLT:
+            return s
+        elif self.jtype == JType.RET:
+            return s + f" {self.value}" if self.value is not None else ""
+        elif self.jtype == JType.JMP:
+            return s + f" {self.true}"
+        elif self.jtype == JType.JNZ:
+            return s + f" {self.value} ? {self.true} : {self.false}"
+        else:
+            return "???"
+
+
+class Inst(object):
+    def __init__(self, op: str, p1: Value, p2: Value | None = None, ret: Var | None = None) -> None:
+        self.op = op
+        self.p1 = p1
+        self.p2 = p2
+        self.ret = ret
+
+    def __str__(self) -> str:
+        s = "%-15s <-" % self.ret if self.ret else "%-18s" % ' '
+        s += f" {self.op} "
+        s += f"({self.p1}, {self.p2})" if self.p2 else f"({self.p1})"
+        return s
+
+
+class Call(object):
+    def __init__(self, name: str, args: List[Var], ret: Var | None):
+        self.name = name
+        self.args = args
+        self.ret = ret
+
+    def __str__(self) -> str:
+        s = f"call {self.name} {Var.ListStr(self.args)} -> {self.ret}\n"
+        return s
 
 
 class Block(object):
-    def __init__(self, name: str, phis: List[Phi], jump: Jump):
+    def __init__(self, name: str, phis: List[Phi], instructions: List[Inst | Call], jump: Jump):
         self.label = name
         self.phis = phis
         self.jump = jump
+        self.instructions = instructions
+
+    def AddInst(self, inst: Inst):
+        self.instructions.append(inst)
+
+    def __str__(self) -> str:
+        s = f"\tBlock {self.label}\n"
+        for p in self.phis:
+            s += '\t\tPhi ' + str(p) + '\n'
+        for i in self.instructions:
+            s += '\t\t' + str(i) + '\n'
+        s += '\t\t' + str(self.jump) + '\n'
+        return s
 
 
 class Function(object):
@@ -127,6 +189,12 @@ class Function(object):
 
     def AddBlock(self, block: Block):
         self.blocks.append(block)
+
+    def __str__(self) -> str:
+        s = f"Function: {self.name} {Var.ListStr(self.params)} -> {self.ret}\n"
+        for b in self.blocks:
+            s += str(b)
+        return s
 
 
 class Qbe(object):
@@ -160,27 +228,66 @@ class Qbe(object):
         return out
 
     def ProcessPhi(self, func: Function, e: dict) -> Phi:
+        self.Debug(f"{func.name} Phi: ", e)
         var: Var = Var(e["var"], e["type"])
         cases: List[PhiCase] = []
         for c in e["cases"]:
             cases.append(PhiCase(c["label"], c["value"]))
         return Phi(var, cases)
 
-    def ProcessJump(self, func: Function, e: dict):
-        pass
+    def ProcessJump(self, func: Function, e: dict) -> Jump:
+        self.Debug(f"{func.name} Jump: ", e)
+        jtype = JType.Name2Jtype(e["jump"])
+        if jtype == JType.HLT:
+            return Jump(jtype)
+        elif jtype == JType.RET:
+            return Jump(jtype, value=e.get("ret_value", None))
+        elif jtype == JType.JMP:
+            return Jump(jtype, true=e["target"])
+        elif jtype == JType.JNZ:
+            return Jump(jtype, value=e["test"], true=e["notzero"], false=e["zero"])
+        else:
+            raise Exception(f"bad jtype {jtype}")
+
+    def ProcessCall(self, e: dict) -> Call:
+        op = e["op"]
+        name = e["name"]
+        ret = Var(e["ret_var"], e["ret_type"]) if "ret_var" in e else None
+        args = self.ProcessParams(e.get("args", []))
+        return Call(name, args, ret)
+
+    def ProcessInstruction(self, func: Function, e: dict) -> Inst | Call:
+        self.Debug(f"{func.name} Inst: ", e)
+        op = e["op"]
+        if op == "call":
+            return self.ProcessCall(e)
+        var = Var(e["var"], e["type"]) if "var" in e else None
+        p1 = Value(e["p1"])
+        p2 = Value(e["p2"]) if "p2" in e else None
+        return Inst(op, p1, p2, var)
 
     def ProcessBlock(self, func: Function, e: dict, next: str | None) -> Block:
         label = e["label"]
         phis: List[Phi] = []
+        insts: List[Inst | Call] = []
         self.Verbose(f"ProcessBlock: [{func.name}] process {label}")
         for p in e["phis"]:
             phi = self.ProcessPhi(func, p)
             phis.append(phi)
-            self.Verbose(f"ProcessBlock: [{func.name}] \tphi {str(phi)}")
-        jdir = e.get("jump", None)
-        jump = self.ProcessJump(func, jdir)
+            self.Verbose(f"ProcessBlock: [{func.name}] \tPhi: {str(phi)}")
+        for i in e["inst"]:
+            inst = self.ProcessInstruction(func, i)
+            self.Verbose(f"ProcessBlock: [{func.name}] \tInst: {str(inst)}")
+            insts.append(inst)
         # self.Debug(name, e)
-        return Block(label, phis=phis, jump=jump)
+        jdir = e.get("jump", {})
+        if not jdir:
+            if not next:
+                raise Exception(f"missing ending jump on last block? {e}")
+            jdir = dict(jump="jmp", target=next)
+        jump = self.ProcessJump(func, jdir)
+        self.Verbose(f"ProcessBlock: [{func.name}] \tJump: {str(jump)}")
+        return Block(label, phis=phis, jump=jump, instructions=insts)
 
     def ProcessFunction(self, e: dict):
         name = f'{e["elem"]} {e["name"]}'
@@ -191,7 +298,6 @@ class Qbe(object):
             f"ProcessFunction: \tParams: {Var.ListStr(params)} -> {ret}")
         func = Function(name, params=params, ret=ret)
         self.functions.append(func)
-        self.Debug(name, e)
         nblocks = len(e["blocks"])
         for bi in range(nblocks):
             b = e['blocks'][bi]
@@ -199,6 +305,7 @@ class Qbe(object):
             if bi + 1 < nblocks:
                 next_label = e['blocks'][bi+1]["label"]
             func.AddBlock(self.ProcessBlock(func, b, next=next_label))
+        print(str(func))
 
     def ProcessType(self, e: dict):
         name = f'{e["elem"]} {e["name"]}'

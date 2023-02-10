@@ -18,7 +18,7 @@ ELEM_FUNC = "function"
 # newline is not to be ignored!
 ParserElement.set_default_whitespace_chars(' \t')
 __diag__.enable_all_warnings()
-#__diag__.enable_debug_on_named_expressions = True
+# __diag__.enable_debug_on_named_expressions = True
 
 ident = Word(alphas + "_" + '.', alphanums + "_" + ".").set_name("ident")
 integer = Word(nums).set_name("integer")
@@ -55,8 +55,10 @@ float_num = (Combine(Optional(sign) + Optional(integer) + Char('.') +
     Optional(sign) + integer +
     Optional(Char('.') + integer)
     + exponent)).set_name("float")
-single_float = Combine(Literal('s_') + (float_num|integer)).set_name("single")
-double_float = Combine(Literal('d_') + (float_num|integer)).set_name("double")
+single_float = Combine(
+    Literal('s_') + (float_num | integer)).set_name("single")
+double_float = Combine(
+    Literal('d_') + (float_num | integer)).set_name("double")
 
 
 # https://c9x.me/compile/doc/il.html#Constants
@@ -291,7 +293,9 @@ func_def = (ZeroOrMore(linkage)("linkage") + Keyword(ELEM_FUNC)("elem") + Option
 arg = ((abi_type + value) | (Literal('env') + value)
        | Literal("...")).set_name("arg")
 call = (Optional(temp("ret_var") + Combine(EQ + abi_type)("ret_type")) + Keyword('call')("op") +
-        value("name") + LPAR + delimited_list(Group(arg))("args") + RPAR + NL).set_name("call")
+        value("name") + LPAR + Optional(delimited_list(Group(arg),
+                                                       allow_trailing_delim=True))("args") +
+        RPAR + NL).set_name("call")
 
 instructions = arithmetic + mem_store + mem_load + \
     stack_alloc + comparators + conversions + casts
@@ -311,7 +315,8 @@ jump = (((Keyword("jmp")("jump") + label("target")) |
 block <<= (Optional(NL) + label("label") + NL + Group(ZeroOrMore(Group(phi)))("phis") +
            Group(ZeroOrMore((Group(instruct))))("inst") + Group(Optional(jump))("jump")).set_name("block")
 
-top = (Group(func_def) | Group(type_def) | Group(data_def) | NL | COMMENT).set_name("top")
+top = (Group(func_def) | Group(type_def) | Group(
+    data_def) | NL | COMMENT).set_name("top")
 qbe_file = Group(OneOrMore(top))("elems").set_name("qbe")
 
 
