@@ -2,6 +2,7 @@
 import argparse
 import enum
 import json
+import os
 import sys
 
 from pyparsing import ParserElement
@@ -117,8 +118,10 @@ class Jump(object):
     def __init__(self, jtype: JType, true: str | None = None, false: str | None = None,
                  value: Value | None = None):
         self.jtype = jtype
-        self.true = true    # unconditional label or true (nonzero) label
-        self.false = false  # conditional false label, else None
+        # unconditional label or true (nonzero) label
+        self.true = true[1:] if type(true) == str else None
+        # conditional false label, else None
+        self.false = false[1:] if type(false) == str else None
         self.value = value      # optional ret value, else None
 
     def __str__(self):
@@ -133,6 +136,18 @@ class Jump(object):
             return s + f" {self.value} ? {self.true} : {self.false}"
         else:
             return "???"
+
+    def Targets(self) -> List[str]:
+        if self.jtype == JType.HLT:
+            return ["Finish"]
+        elif self.jtype == JType.RET:
+            return []   # return to caller
+        elif self.jtype == JType.JMP:
+            return [f"{self.true}"]
+        elif self.jtype == JType.JNZ:
+            return [f"{self.true}", f"{self.false}"]
+        else:
+            return ["???"]
 
 
 class Inst(object):
@@ -179,6 +194,23 @@ class Block(object):
         s += '\t\t' + str(self.jump) + '\n'
         return s
 
+    def Dot(self, funcname: str, symbols: 'Symbols') -> str:
+        name = self.label
+        s = ""
+        if self.jump.jtype == JType.RET:
+            s += f'\t\t{name} -> "{funcname}_ret"\n'
+        for t in self.jump.Targets():
+            s += f"\t\t{name} -> {t}\n"
+        for i in self.instructions:
+            if type(i) == Call:
+                fname = i.name[1:]
+                if fname in symbols.functions:
+                    s += f"\t\t{name} -> {fname}_Start[color=red]\n"
+                    s += f"\t\t{fname}_ret -> {name}[color=blue]\n"
+                else:
+                    s += f"\t\t{name} -> {fname}[color=green]\n"
+        return s
+
 
 class Function(object):
     def __init__(self, name: str, params: List[Var], ret: VType | None):
@@ -196,15 +228,43 @@ class Function(object):
             s += str(b)
         return s
 
+    def Dot(self, symbols: 'Symbols') -> str:
+        s = f"\tsubgraph cluster_{self.name} {{\n"
+        s += f'\t\tlabel = "{self.name}"\n'
+        s += "\t\tstyle=filled;\n"
+        s += f"\t\t{self.name}_Start [ style = rounded ];\n"
+        s += f"\t\t{self.name}_Start -> {self.blocks[0].label};\n"
+        # {Var.ListStr(self.params)} -> {self.ret}\n"
+        for b in self.blocks:
+            s += b.Dot(self.name, symbols)
+        s += "\t}\n"
+        return s
+
+
+class Symbols(object):
+    def __init__(self):
+        self.data = []
+        self.functions: Dict[str, Function] = {}
+        self.exdata = []
+        self.exfunc: Dict[str, Function] = {}
+
+    def AddFunction(self, func: Function):
+        self.functions[func.name] = func
+
+    def AddData(self):
+        pass
+
 
 class Qbe(object):
-    def __init__(self, filename: str, args: argparse.Namespace):
+    def __init__(self, filename: str, symbols: Symbols, args: argparse.Namespace):
         self.file = filename
         self.verbose = args.verbose
         self.debug = args.debug
+        self.dot = args.dot
         self.elem_summary = args.elem
         self.qbe_dict: dict = {}
-        self.functions: List[Function] = []
+        self.functions: Dict[str, Function] = {}
+        self.symbols = symbols
 
     def Verbose(self, s: str):
         if self.verbose:
@@ -228,7 +288,7 @@ class Qbe(object):
         return out
 
     def ProcessPhi(self, func: Function, e: dict) -> Phi:
-        self.Debug(f"{func.name} Phi: ", e)
+        self.Debug(f"[{func.name}] Phi: ", e)
         var: Var = Var(e["var"], e["type"])
         cases: List[PhiCase] = []
         for c in e["cases"]:
@@ -257,7 +317,7 @@ class Qbe(object):
         return Call(name, args, ret)
 
     def ProcessInstruction(self, func: Function, e: dict) -> Inst | Call:
-        self.Debug(f"{func.name} Inst: ", e)
+        self.Debug(f"[{func.name}] Inst: ", e)
         op = e["op"]
         if op == "call":
             return self.ProcessCall(e)
@@ -267,7 +327,7 @@ class Qbe(object):
         return Inst(op, p1, p2, var)
 
     def ProcessBlock(self, func: Function, e: dict, next: str | None) -> Block:
-        label = e["label"]
+        label = e["label"][1:]
         phis: List[Phi] = []
         insts: List[Inst | Call] = []
         self.Verbose(f"ProcessBlock: [{func.name}] process {label}")
@@ -290,14 +350,16 @@ class Qbe(object):
         return Block(label, phis=phis, jump=jump, instructions=insts)
 
     def ProcessFunction(self, e: dict):
-        name = f'{e["elem"]} {e["name"]}'
+        name = f'{e["name"][1:]}'
         ret = e.get("return_type", None)
         params = self.ProcessParams(e.get("params", []))
-        self.Verbose(f"ProcessFunction: process {name}")
         self.Verbose(
-            f"ProcessFunction: \tParams: {Var.ListStr(params)} -> {ret}")
+            f"ProcessFunction: process {name} {Var.ListStr(params)} -> {ret}")
+        self.Verbose(
+            f"ProcessFunction: \t")
         func = Function(name, params=params, ret=ret)
-        self.functions.append(func)
+        self.functions[name] = func
+        self.symbols.AddFunction(func)
         nblocks = len(e["blocks"])
         for bi in range(nblocks):
             b = e['blocks'][bi]
@@ -305,7 +367,6 @@ class Qbe(object):
             if bi + 1 < nblocks:
                 next_label = e['blocks'][bi+1]["label"]
             func.AddBlock(self.ProcessBlock(func, b, next=next_label))
-        print(str(func))
 
     def ProcessType(self, e: dict):
         name = f'{e["elem"]} {e["name"]}'
@@ -339,6 +400,21 @@ class Qbe(object):
         for e in self.qbe_dict["elems"]:
             self.ProcessElem(e)
 
+    def Dot(self) -> str:
+        name = os.path.basename(self.file)
+        name = name.replace(".", "_")
+        s = f"digraph {name} {{\n"
+        # s += "\tcompound=true;\n"
+        s += '\tnode [ shape = "Mrecord" ];\n'
+        for f in self.functions.values():
+            s += f.Dot(self.symbols)
+        s += "\tStart [ style = rounded ];\n"
+        s += "\tStart -> main_Start\n"
+        s += "\tFinish [ style = rounded ];\n"
+        s += "\tmain_ret -> Finish\n"
+        s += "}\n"
+        return s
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -349,15 +425,20 @@ if __name__ == "__main__":
                         nargs='+',)           # positional argument
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="trace processing flow.")  # on/off flag
+    parser.add_argument('-g', '--dot', action='store_true',
+                        help="plot dot graph.")  # on/off flag
     parser.add_argument('-d', '--debug', action='store_true',
                         help='show raw dict (after parsing).')  # on/off flag
     parser.add_argument('-e', '--elem', action='store_true',
                         help='only list elements.')  # on/off flag
     args = parser.parse_args()
+    symbols = Symbols()
     for f in args.filename:
         try:
-            q = Qbe(f, args)
+            q = Qbe(f, symbols=symbols, args=args)
             q.ProcessFile()
+            if args.dot:
+                print(q.Dot())
         except ParseException as e:
             print(f"Processing '{f}' failed: {str(e)}", file=sys.stderr)
         except IOError as e:
