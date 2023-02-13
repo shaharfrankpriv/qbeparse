@@ -256,15 +256,19 @@ class Symbols(object):
 
 
 class Qbe(object):
-    def __init__(self, filename: str, symbols: Symbols, args: argparse.Namespace):
+    def __init__(self, filename: str, symbols: Symbols):
         self.file = filename
-        self.verbose = args.verbose
-        self.debug = args.debug
-        self.dot = args.dot
-        self.elem_summary = args.elem
+        self.verbose = False
+        self.debug = False
         self.qbe_dict: dict = {}
         self.functions: Dict[str, Function] = {}
         self.symbols = symbols
+
+    def SetVerbose(self, flag: bool = True):
+        self.verbose = flag
+
+    def SetDebug(self, flag: bool = True):
+        self.debug = flag
 
     def Verbose(self, s: str):
         if self.verbose:
@@ -379,10 +383,6 @@ class Qbe(object):
         self.Debug(name, e)
 
     def ProcessElem(self, e: dict):
-        if self.elem_summary:
-            name = f'{e["elem"]} {e["name"]}'
-            print(name)
-            return
         elem = e['elem']
         if elem == qbe.ELEM_FUNC:
             self.ProcessFunction(e)
@@ -399,6 +399,14 @@ class Qbe(object):
             open(self.file, "r").read() + "\n").as_dict()
         for e in self.qbe_dict["elems"]:
             self.ProcessElem(e)
+
+    def ElememtsSummary(self) -> None:
+        self.Verbose(f"ProcessFile: process file '{self.file}'")
+        self.qbe_dict = qbe.ParseText(
+            open(self.file, "r").read() + "\n").as_dict()
+        for e in self.qbe_dict["elems"]:
+            name = f'{e["elem"]} {e["name"]}'
+            print(name)
 
     def Dot(self) -> str:
         name = os.path.basename(self.file)
@@ -435,7 +443,14 @@ if __name__ == "__main__":
     symbols = Symbols()
     for f in args.filename:
         try:
-            q = Qbe(f, symbols=symbols, args=args)
+            q = Qbe(f, symbols=symbols)
+            if args.elem:
+                q.ElememtsSummary()
+                continue
+            if args.debug:
+                q.SetDebug()
+            if args.verbose:
+                q.SetVerbose()
             q.ProcessFile()
             if args.dot:
                 print(q.Dot())
