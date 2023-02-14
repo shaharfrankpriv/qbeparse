@@ -78,6 +78,16 @@ class Value(object):
             s += f" ({self.const})"
         return s
 
+    def GetInt(self) -> int | None:
+        if type(self.const) == int:
+            return self.const
+        return None
+
+    def GetFloat(self) -> float | None:
+        if type(self.const) == float:
+            return self.const
+        return None
+
 
 class PhiCase(object):
     def __init__(self, label: str, value: Value):
