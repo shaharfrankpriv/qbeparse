@@ -158,6 +158,8 @@ class TestQBEParsing(unittest.TestCase):
             TestCase("linkage export + comment", qbe.linkage,
                      "export # this is a comment \n", "export"),
 
+            TestCase("linkage thread", qbe.linkage, "thread", "thread"),
+
             TestCase("linkage section", qbe.linkage,
                      'section "hello"', ['section', 'hello']),
             TestCase("linkage section + flags", qbe.linkage,
@@ -221,13 +223,29 @@ class TestQBEParsing(unittest.TestCase):
                 "type": "l", "items": [{"global": {"symbol": "$c"}}]}),
 
             TestCase("data_def, 2 type lists", qbe.data_def, "data $a = { w 1 2 3, b 0 }\n",
-                     {'elem': 'data', "name": "$a", "data_def": [{"type": "w", "items": [{"const": "1"}, {"const": "2"}, {"const": "3"}]},
-                                                                 {"type": "b", "items": [{"const": "0"}]}]}),
+                     {'elem': 'data', 'linkage': [], "name": "$a", "data_def": [{"type": "w", "items": [{"const": "1"}, {"const": "2"}, {"const": "3"}]},
+                                                                                {"type": "b", "items": [{"const": "0"}]}]}),
             TestCase("data_def clear bytes", qbe.data_def,
-                     "data $b = {z 10}\n", {'elem': 'data', "name": "$b", "data_def": [{"zero_count": "10"}]}),
-            TestCase("data_def long neg const, long global", qbe.data_def, "data $c = { l -1, l $c }\n", {'elem': 'data', "name": "$c", "data_def": [
-                {"type": "l", "items": [{"const": "-1"}]},
-                {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
+                     "data $b = {z 10}\n", {'elem': 'data', 'linkage': [], "name": "$b", "data_def": [{"zero_count": "10"}]}),
+            TestCase("data_def long neg const, long global", qbe.data_def, "data $c = { l -1, l $c }\n",
+                     {'elem': 'data', 'linkage': [], "name": "$c", "data_def": [
+                         {"type": "l", "items": [{"const": "-1"}]},
+                         {"type": "l", "items": [{"global": {"symbol": "$c"}}]}]}),
+            TestCase("tls data_def", qbe.data_def,
+                     "thread data $i = align 4 {w 42}\n",
+                     {'elem': 'data', 'align': ['align', '4'], 'linkage': ['thread'], "name": "$i", "data_def": [
+                         {'items': [{'const': '42'}], 'type': 'w'}
+                     ]}),
+            TestCase("export tls data_def", qbe.data_def,
+                     "export thread data $i = align 4 {w 42}\n",
+                     {'elem': 'data', 'align': ['align', '4'], 'linkage': ['export', 'thread'], "name": "$i", "data_def": [
+                         {'items': [{'const': '42'}], 'type': 'w'}
+                     ]}),
+            TestCase("export tls section data data_def", qbe.data_def,
+                     'export thread section "data" data $i = align 4 {w 42}\n',
+                     {'elem': 'data', 'align': ['align', '4'], 'linkage': ['export', 'thread', 'section', 'data'], "name": "$i", "data_def": [
+                         {'items': [{'const': '42'}], 'type': 'w'}
+                     ]})
         ]
         self.assertEqual(test_elements(tests, self), 0)
 

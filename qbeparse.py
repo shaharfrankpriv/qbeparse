@@ -70,7 +70,7 @@ value = (const | temp).set_name("value")
 # https://c9x.me/compile/doc/il.html#Linkage
 secname = QuotedString('"').set_name("secname")
 secflags = QuotedString('"').set_name("secflags")
-linkage = ((Keyword("export") | (
+linkage = ((Keyword("export") | (Keyword("thread")) | (
     Keyword("section") + secname + Optional(secflags))) + Optional(NL)).set_name("linkage")
 
 # https://c9x.me/compile/doc/il.html#Definitions
@@ -96,8 +96,8 @@ data_item = (Group((global_ident("symbol") + Optional(Suppress(Char('+')) + inte
                     ))("global") | QuotedString('"')("string") | const("const")).set_name("data_item")
 data_entry = ((ext_type("type") + (OneOrMore(Group(data_item)))("items")) |
               (Suppress(Literal('z')) + integer("zero_count"))).set_name("data_entry")
-data_def = (ZeroOrMore(linkage) + Keyword(ELEM_DATA)("elem") + global_ident("name") +
-            EQ + Optional(align) + LBRACE +
+data_def = (ZeroOrMore(linkage)("linkage") + Keyword(ELEM_DATA)("elem") + global_ident("name") +
+            EQ + Optional(align)("align") + LBRACE +
             Group(delimited_list(Group(data_entry), delim=',',
                                  allow_trailing_delim=True))("data_def") + RBRACE + NL).set_name("data_def")
 

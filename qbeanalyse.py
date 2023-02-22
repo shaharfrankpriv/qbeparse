@@ -64,7 +64,7 @@ class Value(object):
         assert self.vscope not in [VScope.LABEL, VScope.USER]
         self.const: None | float | int = None
         if self.vscope == VScope.CONST:
-            if self.val[:2] in ['_s', '_d']:
+            if self.val[:2] in ['s_', 'd_']:
                 self.const = float(self.val[2:])
             else:
                 self.const = int(self.val)
