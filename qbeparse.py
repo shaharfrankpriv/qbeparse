@@ -62,6 +62,7 @@ double_float = Combine(
 
 
 # https://c9x.me/compile/doc/il.html#Constants
+dynconst = Group(Keyword("thread") + global_ident)
 const = (Combine(
     Optional('-') + integer) | single_float | double_float | global_ident).set_name("const")
 
@@ -117,7 +118,7 @@ t_m = Char('l')   # assuming 64-bit arch
 
 def inst1(name: str, ret: Char, p1: Char, group: list):
     prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
-    body = Keyword(name)("op") + value("p1") + NL
+    body = Keyword(name)("op") + Optional(Keyword("thread"))("thp1") + value("p1") + NL
     inst = (prefix + body) if ret else body
     group.append(inst)
     return inst.set_name(name)
@@ -125,7 +126,7 @@ def inst1(name: str, ret: Char, p1: Char, group: list):
 
 def inst2(name: str, ret: Char | None, p1: Char, p2: Char, group: list):
     prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
-    body = Keyword(name)("op") + value("p1") + COMMA + value("p2") + NL
+    body = Keyword(name)("op") + Optional(Keyword("thread"))("thp1") + value("p1") + COMMA + Optional(Keyword("thread"))("thp2") + value("p2") + NL
     inst = (prefix + body) if ret else body
     group.append(inst)
     return inst.set_name(name)

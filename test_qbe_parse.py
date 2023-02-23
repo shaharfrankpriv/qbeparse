@@ -253,6 +253,8 @@ class TestQBEParsing(unittest.TestCase):
         tests = [
             TestCase("add w + w", qbe.i_add, "%y =w add %w, %y\n",
                      {'var': '%y', 'type': 'w', 'op': 'add', 'p1': '%w', 'p2': '%y'}),
+            TestCase("add thread i + 3", qbe.i_add, "%i3 =l add thread $i, 3\n",
+                     {'var': '%i3', 'type': 'l', 'op': 'add', 'p1': '$i', 'thp1': "thread", 'p2': '3'}),
             TestCase("sub w + w", qbe.i_sub, "%y =w sub %w, %y\n",
                      {'var': '%y', 'type': 'w', 'op': 'sub', 'p1': '%w', 'p2': '%y'}),
             TestCase("div w + w", qbe.i_div, "%y =w div %w, %y\n",
@@ -324,6 +326,9 @@ class TestQBEParsing(unittest.TestCase):
                      {'var': '%z', 'type': 'w', 'op': 'loaduh', 'p1': '%w'}),
             TestCase("load ub -> m", qbe.i_loadub, "%z =w loadub %w\n",
                      {'var': '%z', 'type': 'w', 'op': 'loadub', 'p1': '%w'}),
+            TestCase("load thread l -> m", qbe.i_loadsw, "%ret =l loadsw thread $i\n",
+                     {'var': '%ret', 'type': 'l', 'op': 'loadsw', 'p1': '$i', 'thp1': "thread"}),
+
         ]
         self.assertEqual(test_elements(tests, self), 0)
 
