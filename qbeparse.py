@@ -18,7 +18,7 @@ ELEM_FUNC = "function"
 # newline is not to be ignored!
 ParserElement.set_default_whitespace_chars(' \t')
 __diag__.enable_all_warnings()
-# __diag__.enable_debug_on_named_expressions = True
+#__diag__.enable_debug_on_named_expressions = True
 
 ident = Word(alphas + "_" + '.', alphanums + "_" + ".").set_name("ident")
 integer = Word(nums).set_name("integer")
@@ -116,7 +116,7 @@ t_F = Char('sd')
 t_m = Char('l')   # assuming 64-bit arch
 
 
-def inst1(name: str, ret: Char, p1: Char, group: list):
+def inst1(name: str, ret: Char | None, p1: Char, group: list):
     prefix = temp("var") + Combine(EQ + ret)("type") if ret else Empty
     body = Keyword(name)("op") + Optional(Keyword("thread"))("thp1") + value("p1") + NL
     inst = (prefix + body) if ret else body
@@ -165,6 +165,8 @@ t_mm = Char('mm')
 i_loadd = inst1("loadd", t_d, t_m, mem_load)
 i_loads = inst1("loads", t_s, t_m, mem_load)
 i_loadl = inst1("loadl", t_l, t_m, mem_load)
+i_load_w = inst1("load", t_l, t_m, mem_load)       # undocumented, == loadl?
+i_load_l = inst1("load", t_w, t_m, mem_load)       # undocumented, == loadw?
 i_loadw = inst1("loadw", t_I, t_m, mem_load)     # syntactic suger for i_loadsw
 i_loadsw = inst1("loadsw", t_I, t_mm, mem_load)
 i_loadsh = inst1("loadsh", t_I, t_mm, mem_load)
@@ -268,6 +270,11 @@ i_cast = inst1("cast", Char('wlsd'), Char('sdwl'), casts)
 # copy the param to the dest (same type)
 i_copy = inst1("copy", t_T, t_T, casts)
 
+# https://c9x.me/compile/doc/il.html#Variadic
+variadic: List[ParserElement] = []
+t_mmmm = Char('mmmm')
+i_vastart = inst1("vastart", None, t_m, variadic)
+i_vaarg = inst1("vaarg", t_T, t_mmmm, variadic)
 
 block = Forward()
 # https://c9x.me/compile/doc/il.html#Functions
@@ -299,7 +306,7 @@ call = (Optional(temp("ret_var") + Combine(EQ + abi_type)("ret_type")) + Keyword
         RPAR + NL).set_name("call")
 
 instructions = arithmetic + mem_store + mem_load + \
-    stack_alloc + comparators + conversions + casts
+    stack_alloc + comparators + conversions + casts + variadic
 instruct = MatchFirst(instructions) | call
 
 # https://c9x.me/compile/doc/il.html#Control
