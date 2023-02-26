@@ -328,6 +328,10 @@ class TestQBEParsing(unittest.TestCase):
                      {'var': '%z', 'type': 'w', 'op': 'loadub', 'p1': '%w'}),
             TestCase("load thread l -> m", qbe.i_loadsw, "%ret =l loadsw thread $i\n",
                      {'var': '%ret', 'type': 'l', 'op': 'loadsw', 'p1': '$i', 'thp1': "thread"}),
+            TestCase("load(l) (hack?) thread l -> m", qbe.i_load_l, "%ret =l load $i\n",
+                     {'var': '%ret', 'type': 'l', 'op': 'load', 'p1': '$i'}),
+            TestCase("load(w) (hack?) thread w -> m", qbe.i_load_w, "%ret =w load $i\n",
+                     {'var': '%ret', 'type': 'w', 'op': 'load', 'p1': '$i'}),
 
         ]
         self.assertEqual(test_elements(tests, self), 0)
@@ -439,6 +443,15 @@ class TestQBEParsing(unittest.TestCase):
         tests = [
             TestCase("phi ret + single user param", qbe.phi, "%y =w phi @ift 1, @iff 2\n", {'var': "%y", "type": "w", "cases": [
                 {"label": "@ift", "value": "1"}, {"label": "@iff", "value": "2"}]}),
+        ]
+        self.assertEqual(test_elements(tests, self), 0)
+
+    def test_variadic(self):
+        tests = [
+            TestCase("vaarg", qbe.i_vaarg, "%i =l vaarg %vp\n",
+                     {'var': '%i', 'type': 'l', 'op': 'vaarg', 'p1': '%vp'}),
+            TestCase("vastart", qbe.i_vastart, "vastart %vp\n",
+                     {'op': 'vastart', 'p1': '%vp'}),
         ]
         self.assertEqual(test_elements(tests, self), 0)
 

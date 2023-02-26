@@ -165,8 +165,8 @@ t_mm = Char('mm')
 i_loadd = inst1("loadd", t_d, t_m, mem_load)
 i_loads = inst1("loads", t_s, t_m, mem_load)
 i_loadl = inst1("loadl", t_l, t_m, mem_load)
-i_load_w = inst1("load", t_l, t_m, mem_load)       # undocumented, == loadl?
-i_load_l = inst1("load", t_w, t_m, mem_load)       # undocumented, == loadw?
+i_load_l = inst1("load", t_l, t_m, mem_load)       # undocumented, == loadl?
+i_load_w = inst1("load", t_w, t_m, mem_load)       # undocumented, == loadw?
 i_loadw = inst1("loadw", t_I, t_m, mem_load)     # syntactic suger for i_loadsw
 i_loadsw = inst1("loadsw", t_I, t_mm, mem_load)
 i_loadsh = inst1("loadsh", t_I, t_mm, mem_load)
