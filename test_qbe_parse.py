@@ -512,8 +512,11 @@ class TestQBEParsing(unittest.TestCase):
                      "env %count", ["env", "%count"]),
             TestCase("param type + variadic", qbe.param, "...", "..."),
 
-            TestCase("function ret + single user param", qbe.func_def, "function w $getone(:one %p) {}\n", {
+            TestCase("function w ret + single user param", qbe.func_def, "function w $getone(:one %p) {}\n", {
                 'linkage': [], 'elem': 'function', 'return_type': 'w', 'name': '$getone', 'params': [
+                    [':one', '%p']], 'blocks': []}),
+            TestCase("function sb ret + single user param", qbe.func_def, "function sb $getone(:one %p) {}\n", {
+                'linkage': [], 'elem': 'function', 'return_type': 'sb', 'name': '$getone', 'params': [
                     [':one', '%p']], 'blocks': []}),
             TestCase("function export, ret + 4 params", qbe.func_def, "export function w $add(env %e, w %a, w %b) {}\n", {
                 'linkage': ["export"], 'elem': 'function', 'return_type': 'w', 'name': '$add', 'params': [

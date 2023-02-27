@@ -280,7 +280,7 @@ block = Forward()
 # https://c9x.me/compile/doc/il.html#Functions
 sub_word = (Literal('sb') | Literal('ub') | Literal(
     'sh') | Literal("uh")).set_name("sub_word")
-abi_type = (base_type | sub_word | user_type).set_name("abi_type")
+abi_type = (sub_word | base_type | user_type).set_name("abi_type")
 param = ((abi_type + temp) | (Keyword('env') + temp)
          | Literal("...")).set_name("param")
 func_def = (ZeroOrMore(linkage)("linkage") + Keyword(ELEM_FUNC)("elem") + Optional(
